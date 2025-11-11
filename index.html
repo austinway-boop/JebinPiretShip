@@ -43,7 +43,6 @@
                 <div class="header-controls">
                     <span class="user-info" id="userInfo"></span>
                     <span class="last-refresh" id="lastRefresh">Last refresh: --</span>
-                    <button class="btn btn-secondary" id="adminToggle">Admin Mode</button>
                     <button class="btn btn-secondary" id="logoutBtn">Logout</button>
                 </div>
             </div>
@@ -53,9 +52,6 @@
         <div class="controls-bar">
             <div class="search-filter-group">
                 <input type="text" id="searchInput" class="search-input" placeholder="Search by name...">
-                <select id="houseFilter" class="filter-select">
-                    <option value="">All Houses</option>
-                </select>
                 <select id="statusFilter" class="filter-select">
                     <option value="">All Status</option>
                     <option value="Active">Active</option>
@@ -99,6 +95,9 @@
             <!-- Table View -->
             <div class="table-view hidden" id="tableView">
                 <div class="table-controls">
+                    <button class="btn btn-success" id="addStudentBtn">+ Add Student</button>
+                    <button class="btn btn-danger" id="deleteSelectedBtn">Delete Selected</button>
+                    <div style="flex: 1;"></div>
                     <button class="btn btn-primary" id="bulkMoveBtn">Move Selected to Pirate Ship</button>
                     <button class="btn btn-primary" id="bulkReleaseBtn">Release Selected</button>
                     <button class="btn btn-primary" id="bulkExtendBtn">Extend Selected (+7d)</button>
@@ -109,7 +108,6 @@
                         <tr>
                             <th><input type="checkbox" id="selectAll"></th>
                             <th>Name</th>
-                            <th>House</th>
                             <th>Status</th>
                             <th>Pirate Start</th>
                             <th>Pirate End</th>
@@ -258,6 +256,41 @@
         </div>
     </div>
 
+    <!-- Add Student Modal -->
+    <div class="modal" id="addStudentModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Student</h3>
+                <button class="modal-close" id="closeAddStudentModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="newStudentName">Student Name *</label>
+                    <input type="text" id="newStudentName" class="form-input" placeholder="Enter student name" required autofocus>
+                </div>
+                <div class="form-group">
+                    <label for="newStudentStatus">Initial Status</label>
+                    <select id="newStudentStatus" class="form-input">
+                        <option value="Active">Active</option>
+                        <option value="PirateShip">Pirate Ship</option>
+                    </select>
+                </div>
+                <div class="form-group" id="newStudentPirateDates" style="display: none;">
+                    <label for="newStudentStartDate">Pirate Ship Start Date:</label>
+                    <input type="datetime-local" id="newStudentStartDate" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label for="newStudentNotes">Notes (optional):</label>
+                    <textarea id="newStudentNotes" class="form-input" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelAddStudentBtn">Cancel</button>
+                <button class="btn btn-primary" id="confirmAddStudentBtn">Add Student</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification -->
     <div class="toast" id="toast">
         <span id="toastMessage"></span>
@@ -267,4 +300,3 @@
     <script src="app.js"></script>
 </body>
 </html>
-

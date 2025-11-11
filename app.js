@@ -38,7 +38,7 @@ function showLogin() {
     document.getElementById('appContainer').classList.add('hidden');
 }
 
-function showApp() {
+async function showApp() {
     document.getElementById('loginModal').classList.add('hidden');
     document.getElementById('appContainer').classList.remove('hidden');
     
@@ -47,7 +47,7 @@ function showApp() {
     updateAdminUI();
     
     // Initialize app
-    loadData();
+    await loadData();
     renderBoard();
     updateLastRefresh();
     startAutoRelease();
@@ -67,20 +67,22 @@ function updateUserInfo() {
 }
 
 function updateAdminUI() {
-    const adminToggle = document.getElementById('adminToggle');
     const isUserAdmin = currentUser && isAdmin(currentUser.email);
     
-    if (isUserAdmin) {
-        adminToggle.style.display = 'inline-block';
-        adminToggle.disabled = false;
-    } else {
-        adminToggle.style.display = 'none';
-        isAdminMode = false;
-    }
+    // Automatically enable admin mode for admin users
+    isAdminMode = isUserAdmin;
     
     // Hide bulk action buttons for non-admins
     const bulkButtons = document.querySelectorAll('#bulkMoveBtn, #bulkReleaseBtn, #bulkExtendBtn, #bulkExtend14Btn');
     bulkButtons.forEach(btn => {
+        if (btn) {
+            btn.style.display = isUserAdmin ? 'inline-block' : 'none';
+        }
+    });
+    
+    // Hide add/delete buttons for non-admins
+    const addDeleteButtons = document.querySelectorAll('#addStudentBtn, #deleteSelectedBtn');
+    addDeleteButtons.forEach(btn => {
         if (btn) {
             btn.style.display = isUserAdmin ? 'inline-block' : 'none';
         }
@@ -124,26 +126,72 @@ function handleLogout() {
     document.getElementById('passwordError').style.display = 'none';
 }
 
-// Data Persistence
-function saveData() {
+// Data Persistence with Vercel KV
+async function saveData() {
+    const data = {
+        students: students,
+        auditLog: auditLog,
+        lastUpdated: new Date().toISOString()
+    };
+    
+    // Save to localStorage first (instant, works offline)
     localStorage.setItem('alphaFleetStudents', JSON.stringify(students));
     localStorage.setItem('alphaFleetAuditLog', JSON.stringify(auditLog));
+    
+    // Also sync to Vercel KV (cloud backup)
+    try {
+        const response = await fetch('/api/save-data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            console.log('✅ Data synced to cloud:', result.kvEnabled ? 'KV' : 'localStorage only');
+        }
+    } catch (error) {
+        console.log('💾 Data saved to localStorage (cloud sync unavailable)');
+    }
 }
 
-function loadData() {
+async function loadData() {
+    // Try localStorage first (fastest)
     const savedStudents = localStorage.getItem('alphaFleetStudents');
     const savedAuditLog = localStorage.getItem('alphaFleetAuditLog');
     
     if (savedStudents) {
         students = JSON.parse(savedStudents);
-    } else {
-        seedData();
-        saveData();
+        auditLog = savedAuditLog ? JSON.parse(savedAuditLog) : [];
+        console.log('📦 Loaded data from localStorage');
+        return;
     }
     
-    if (savedAuditLog) {
-        auditLog = JSON.parse(savedAuditLog);
+    // If no localStorage, try loading from cloud
+    try {
+        const response = await fetch('/api/save-data');
+        if (response.ok) {
+            const data = await response.json();
+            if (data.students && data.students.length > 0) {
+                students = data.students;
+                auditLog = data.auditLog || [];
+                console.log('☁️ Loaded data from cloud');
+                // Save to localStorage for future use
+                localStorage.setItem('alphaFleetStudents', JSON.stringify(students));
+                localStorage.setItem('alphaFleetAuditLog', JSON.stringify(auditLog));
+                return;
+            }
+        }
+    } catch (error) {
+        console.log('ℹ️ No cloud data available');
     }
+    
+    // If no data found anywhere, seed with sample data
+    console.log('🌱 Seeding initial data');
+    seedData();
+    await saveData();
 }
 
 function seedData() {
@@ -231,15 +279,11 @@ function initializeEventListeners() {
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', handleLogout);
     
-    // Admin toggle
-    document.getElementById('adminToggle').addEventListener('click', toggleAdminMode);
-    
     // View toggle
     document.getElementById('viewToggle').addEventListener('click', toggleView);
     
     // Search and filters
     document.getElementById('searchInput').addEventListener('input', renderBoard);
-    document.getElementById('houseFilter').addEventListener('change', renderBoard);
     document.getElementById('statusFilter').addEventListener('change', renderBoard);
     document.getElementById('urgentFilter').addEventListener('change', renderBoard);
     
@@ -272,6 +316,24 @@ function initializeEventListeners() {
     document.getElementById('customDateBtn').addEventListener('click', openCustomDateModal);
     document.getElementById('saveNotesBtn').addEventListener('click', saveNotes);
     
+    // Add/Remove students
+    document.getElementById('addStudentBtn').addEventListener('click', openAddStudentModal);
+    document.getElementById('deleteSelectedBtn').addEventListener('click', deleteSelectedStudents);
+    document.getElementById('closeAddStudentModal').addEventListener('click', closeAddStudentModal);
+    document.getElementById('cancelAddStudentBtn').addEventListener('click', closeAddStudentModal);
+    document.getElementById('confirmAddStudentBtn').addEventListener('click', confirmAddStudent);
+    document.getElementById('newStudentStatus').addEventListener('change', (e) => {
+        const pirateDates = document.getElementById('newStudentPirateDates');
+        if (e.target.value === 'PirateShip') {
+            pirateDates.style.display = 'block';
+            const now = new Date();
+            const startDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+            document.getElementById('newStudentStartDate').value = startDate;
+        } else {
+            pirateDates.style.display = 'none';
+        }
+    });
+    
     // Bulk actions
     document.getElementById('bulkMoveBtn').addEventListener('click', openBulkMoveModal);
     document.getElementById('bulkReleaseBtn').addEventListener('click', bulkRelease);
@@ -295,24 +357,13 @@ function initializeEventListeners() {
     document.getElementById('customDateModal').addEventListener('click', (e) => {
         if (e.target.id === 'customDateModal') closeCustomDateModal();
     });
+    document.getElementById('addStudentModal').addEventListener('click', (e) => {
+        if (e.target.id === 'addStudentModal') closeAddStudentModal();
+    });
     
     // Pirate start date change handler
     document.getElementById('pirateStartDate').addEventListener('change', updatePirateEndDate);
     document.getElementById('bulkStartDate').addEventListener('change', updateBulkEndDate);
-}
-
-// Admin Mode
-function toggleAdminMode() {
-    if (!currentUser || !isAdmin(currentUser.email)) {
-        alert('Admin access only. Please contact an administrator.');
-        return;
-    }
-    
-    isAdminMode = !isAdminMode;
-    const btn = document.getElementById('adminToggle');
-    btn.textContent = isAdminMode ? 'Exit Admin Mode' : 'Admin Mode';
-    btn.classList.toggle('btn-success', isAdminMode);
-    renderBoard();
 }
 
 // View Toggle
@@ -372,14 +423,21 @@ function renderTableView() {
     
     filtered.forEach(student => {
         const row = document.createElement('tr');
+        row.dataset.id = student.id;
         const daysLeft = student.status === 'PirateShip' ? getDaysRemaining(student) : '-';
         const startDate = student.pirate_start ? new Date(student.pirate_start).toLocaleDateString() : '-';
         const endDate = student.pirate_end ? new Date(student.pirate_end).toLocaleDateString() : '-';
         
+        const nameCell = isUserAdmin 
+            ? `<td class="editable-name" data-id="${student.id}">
+                <span class="name-display">${student.full_name}</span>
+                <input type="text" class="name-edit-input" value="${student.full_name}" style="display: none;">
+               </td>`
+            : `<td>${student.full_name}</td>`;
+        
         row.innerHTML = `
             <td style="display: ${isUserAdmin ? 'table-cell' : 'none'}"><input type="checkbox" class="row-checkbox" data-id="${student.id}"></td>
-            <td>${student.full_name}</td>
-            <td>${student.house_or_group}</td>
+            ${nameCell}
             <td><span class="status-chip ${student.status === 'Active' ? 'active' : 'pirate-ship'}">${student.status === 'Active' ? 'Active' : 'Pirate Ship'}</span></td>
             <td>${startDate}</td>
             <td>${endDate}</td>
@@ -387,11 +445,52 @@ function renderTableView() {
             <td>${student.notes || '-'}</td>
             <td>
                 <button class="btn btn-small btn-secondary view-detail" data-id="${student.id}">View</button>
+                ${isUserAdmin ? `<button class="btn btn-small btn-danger delete-student" data-id="${student.id}" style="margin-left: 5px;">Delete</button>` : ''}
             </td>
         `;
         
         tableBody.appendChild(row);
     });
+    
+    // Add delete button listeners
+    if (isUserAdmin) {
+        document.querySelectorAll('.delete-student').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteStudent(e.target.dataset.id);
+            });
+        });
+    }
+    
+    // Add inline editing for names (admin only)
+    if (isUserAdmin) {
+        document.querySelectorAll('.editable-name').forEach(cell => {
+            const display = cell.querySelector('.name-display');
+            const input = cell.querySelector('.name-edit-input');
+            
+            display.addEventListener('click', () => {
+                display.style.display = 'none';
+                input.style.display = 'block';
+                input.focus();
+                input.select();
+            });
+            
+            input.addEventListener('blur', () => {
+                saveStudentName(cell.dataset.id, input.value.trim());
+            });
+            
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    input.blur();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    input.value = display.textContent;
+                    input.blur();
+                }
+            });
+        });
+    }
     
     // Add event listeners for checkboxes and view buttons
     document.querySelectorAll('.row-checkbox').forEach(cb => {
@@ -431,7 +530,6 @@ function createStudentCard(student) {
         <div class="card-header">
             <div>
                 <div class="card-name">${student.full_name}</div>
-                <span class="card-house">${student.house_or_group}</span>
             </div>
         </div>
         <div class="card-body">
@@ -443,6 +541,22 @@ function createStudentCard(student) {
             <button class="btn btn-small btn-secondary view-detail" data-id="${student.id}">Details</button>
         </div>
     `;
+    // Remove any tooltips or title attributes
+    card.removeAttribute('title');
+    card.setAttribute('data-no-tooltip', 'true');
+    
+    // Remove title from all child elements
+    card.querySelectorAll('*').forEach(el => {
+        el.removeAttribute('title');
+    });
+    
+    // Prevent any hover tooltips
+    card.addEventListener('mouseenter', (e) => {
+        e.target.removeAttribute('title');
+        if (e.target.querySelectorAll) {
+            e.target.querySelectorAll('*').forEach(el => el.removeAttribute('title'));
+        }
+    });
     
     card.querySelector('.view-detail').addEventListener('click', (e) => {
         openDrawer(e.target.dataset.id);
@@ -952,11 +1066,6 @@ function getFilteredStudents() {
         filtered = filtered.filter(s => s.full_name.toLowerCase().includes(search));
     }
     
-    const house = document.getElementById('houseFilter').value;
-    if (house) {
-        filtered = filtered.filter(s => s.house_or_group === house);
-    }
-    
     const status = document.getElementById('statusFilter').value;
     if (status) {
         filtered = filtered.filter(s => s.status === status);
@@ -975,14 +1084,7 @@ function getFilteredStudents() {
 }
 
 function populateHouseFilter() {
-    const houseFilter = document.getElementById('houseFilter');
-    const houses = [...new Set(students.map(s => s.house_or_group))].sort();
-    houses.forEach(house => {
-        const option = document.createElement('option');
-        option.value = house;
-        option.textContent = house;
-        houseFilter.appendChild(option);
-    });
+    // No longer needed - house filter removed
 }
 
 function updateCounts() {
@@ -1089,7 +1191,7 @@ function undoLastAction() {
 
 // Export CSV
 function exportCSV() {
-    const headers = ['Name', 'House', 'Status', 'Pirate Start', 'Pirate End', 'Days Left', 'Notes'];
+    const headers = ['Name', 'Status', 'Pirate Start', 'Pirate End', 'Days Left', 'Notes'];
     const rows = students.map(student => {
         const daysLeft = student.status === 'PirateShip' ? getDaysRemaining(student) : '';
         const startDate = student.pirate_start ? new Date(student.pirate_start).toLocaleDateString() : '';
@@ -1097,7 +1199,6 @@ function exportCSV() {
         
         return [
             student.full_name,
-            student.house_or_group,
             student.status,
             startDate,
             endDate,
@@ -1120,6 +1221,184 @@ function exportCSV() {
     window.URL.revokeObjectURL(url);
 }
 
+// Edit Student Name
+function saveStudentName(studentId, newName) {
+    if (!currentUser || !isAdmin(currentUser.email)) {
+        return;
+    }
+    
+    if (!newName || newName.trim() === '') {
+        // Restore original name if empty
+        const student = students.find(s => s.id === studentId);
+        if (student) {
+            const cell = document.querySelector(`.editable-name[data-id="${studentId}"]`);
+            if (cell) {
+                const input = cell.querySelector('.name-edit-input');
+                const display = cell.querySelector('.name-display');
+                input.value = student.full_name;
+                display.style.display = 'block';
+                input.style.display = 'none';
+            }
+        }
+        return;
+    }
+    
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
+    
+    const oldValues = { ...student };
+    student.full_name = newName.trim();
+    student.last_updated_by = currentUser ? currentUser.name : 'System';
+    student.last_updated_at = new Date().toISOString();
+    
+    logAudit(student.id, 'Edit Name', oldValues, { ...student });
+    saveData();
+    
+    // Update display
+    const cell = document.querySelector(`.editable-name[data-id="${studentId}"]`);
+    if (cell) {
+        const display = cell.querySelector('.name-display');
+        const input = cell.querySelector('.name-edit-input');
+        display.textContent = newName.trim();
+        display.style.display = 'block';
+        input.style.display = 'none';
+    }
+    
+    // Re-render to update all views
+    renderBoard();
+    showToast(`Updated name to "${newName.trim()}".`);
+}
+
+// Add Student
+function openAddStudentModal() {
+    if (!currentUser || !isAdmin(currentUser.email)) {
+        alert('Admin access only. Please contact an administrator.');
+        return;
+    }
+    
+    const modal = document.getElementById('addStudentModal');
+    document.getElementById('newStudentName').value = '';
+    document.getElementById('newStudentStatus').value = 'Active';
+    document.getElementById('newStudentNotes').value = '';
+    document.getElementById('newStudentPirateDates').style.display = 'none';
+    modal.classList.add('active');
+}
+
+function closeAddStudentModal() {
+    document.getElementById('addStudentModal').classList.remove('active');
+}
+
+function confirmAddStudent() {
+    const name = document.getElementById('newStudentName').value.trim();
+    const status = document.getElementById('newStudentStatus').value;
+    const notes = document.getElementById('newStudentNotes').value.trim();
+    
+    if (!name) {
+        alert('Please enter a student name');
+        return;
+    }
+    
+    const now = new Date();
+    const studentId = `student-${Date.now()}`;
+    let pirateStart = null;
+    let pirateEnd = null;
+    
+    if (status === 'PirateShip') {
+        const startDate = document.getElementById('newStudentStartDate').value;
+        if (startDate) {
+            pirateStart = new Date(startDate).toISOString();
+            pirateEnd = new Date(new Date(startDate).getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
+        } else {
+            pirateStart = now.toISOString();
+            pirateEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
+        }
+    }
+    
+    const newStudent = {
+        id: studentId,
+        full_name: name,
+        house_or_group: '', // Keep for data structure but not displayed
+        status: status,
+        pirate_start: pirateStart,
+        pirate_end: pirateEnd,
+        notes: notes,
+        last_updated_by: currentUser ? currentUser.name : 'System',
+        last_updated_at: now.toISOString()
+    };
+    
+    students.push(newStudent);
+    
+    logAudit(studentId, 'Add Student', null, newStudent);
+    saveData();
+    renderBoard();
+    closeAddStudentModal();
+    showToast(`Added student "${name}".`);
+}
+
+// Delete Student
+function deleteStudent(studentId) {
+    if (!currentUser || !isAdmin(currentUser.email)) {
+        alert('Admin access only. Please contact an administrator.');
+        return;
+    }
+    
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
+    
+    if (!confirm(`Are you sure you want to delete "${student.full_name}"? This action cannot be undone.`)) {
+        return;
+    }
+    
+    const oldValues = { ...student };
+    const index = students.findIndex(s => s.id === studentId);
+    if (index !== -1) {
+        students.splice(index, 1);
+    }
+    
+    logAudit(studentId, 'Delete Student', oldValues, null);
+    saveData();
+    renderBoard();
+    showToast(`Deleted student "${oldValues.full_name}".`);
+}
+
+function deleteSelectedStudents() {
+    if (!currentUser || !isAdmin(currentUser.email)) {
+        alert('Admin access only. Please contact an administrator.');
+        return;
+    }
+    
+    const selected = getSelectedStudents();
+    if (selected.length === 0) {
+        alert('Please select at least one student to delete');
+        return;
+    }
+    
+    const studentNames = selected.map(id => {
+        const student = students.find(s => s.id === id);
+        return student ? student.full_name : '';
+    }).filter(name => name);
+    
+    if (!confirm(`Are you sure you want to delete ${selected.length} student(s)?\n\n${studentNames.join(', ')}\n\nThis action cannot be undone.`)) {
+        return;
+    }
+    
+    selected.forEach(studentId => {
+        const student = students.find(s => s.id === studentId);
+        if (student) {
+            const oldValues = { ...student };
+            const index = students.findIndex(s => s.id === studentId);
+            if (index !== -1) {
+                students.splice(index, 1);
+            }
+            logAudit(studentId, 'Bulk Delete Student', oldValues, null);
+        }
+    });
+    
+    saveData();
+    renderBoard();
+    showToast(`Deleted ${selected.length} student(s).`);
+}
+
 // Last Refresh
 function updateLastRefresh() {
     const now = new Date();
@@ -1129,4 +1408,3 @@ function updateLastRefresh() {
         document.getElementById('lastRefresh').textContent = `Last refresh: ${now.toLocaleTimeString()}`;
     }, 60000); // Update every minute
 }
-

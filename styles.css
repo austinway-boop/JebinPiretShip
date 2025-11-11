@@ -297,19 +297,40 @@ body {
     cursor: not-allowed;
 }
 
-.student-card.read-only:hover::after {
-    content: "Read-only. Ask a guide to update.";
-    position: absolute;
-    bottom: -30px;
-    left: 0;
-    background: #333;
-    color: white;
-    padding: 5px 10px;
-    border-radius: 4px;
-    font-size: 12px;
-    white-space: nowrap;
-    z-index: 1000;
+.student-card.read-only:hover::after,
+.student-card.read-only:hover::before,
+.student-card:hover::after,
+.student-card:hover::before {
+    display: none !important;
+    content: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
 }
+
+.student-card {
+    position: relative;
+}
+
+.student-card::after,
+.student-card::before {
+    display: none !important;
+    content: none !important;
+}
+
+/* Global tooltip prevention */
+[title] {
+    position: relative;
+}
+
+.student-card[title]:hover::after,
+.student-card[title]::after {
+    display: none !important;
+    content: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
 
 .card-header {
     display: flex;
@@ -406,6 +427,7 @@ body {
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     padding: 20px;
     overflow-x: auto;
+    overflow-y: visible;
 }
 
 .table-controls {
@@ -425,6 +447,8 @@ body {
     padding: 12px;
     text-align: left;
     border-bottom: 1px solid #eee;
+    position: relative;
+    overflow: visible;
 }
 
 .data-table th {
@@ -433,12 +457,51 @@ body {
     color: #2c3e50;
 }
 
+.data-table tr {
+    position: relative;
+}
+
 .data-table tr:hover {
     background: #f8f9fa;
 }
 
+.data-table tr:hover td {
+    position: relative;
+    z-index: 1;
+}
+
 .data-table input[type="checkbox"] {
     cursor: pointer;
+}
+
+.editable-name {
+    cursor: pointer;
+    position: relative;
+}
+
+.editable-name:hover .name-display {
+    background: #f0f0f0;
+    border-radius: 4px;
+    padding: 2px 4px;
+}
+
+.name-display {
+    display: inline-block;
+    min-width: 150px;
+}
+
+.name-edit-input {
+    width: 100%;
+    padding: 4px 8px;
+    border: 2px solid #3498db;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+.name-edit-input:focus {
+    outline: none;
+    border-color: #2980b9;
 }
 
 /* Modals */
@@ -703,4 +766,3 @@ body {
         overflow-x: scroll;
     }
 }
-

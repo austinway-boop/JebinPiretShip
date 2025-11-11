@@ -1,8 +1,7 @@
 {
   "name": "alpha-fleet-board",
-  "version": "2.0.0",
-  "description": "Student accountability dashboard for Alpha Afterschool program",
-  "main": "server.js",
+  "version": "2.1.0",
+  "description": "Student accountability dashboard for Alpha Afterschool program - Pirate Ship",
   "type": "module",
   "scripts": {
     "start": "node server.js",
@@ -11,9 +10,11 @@
   "keywords": [
     "pirate-ship",
     "accountability",
-    "dashboard"
+    "dashboard",
+    "vercel",
+    "student-management"
   ],
-  "author": "",
+  "author": "Alpha Fleet Admin",
   "license": "MIT",
   "dependencies": {
     "@vercel/kv": "^1.0.1"

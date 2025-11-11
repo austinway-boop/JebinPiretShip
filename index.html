@@ -3,27 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Alpha Fleet Board - Pirate Ship</title>
+    <title>Alpha Fleet Board (Pirate Ship)</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div id="app">
+    <!-- Login Modal -->
+    <div class="login-modal" id="loginModal">
+        <div class="login-content">
+            <div class="login-header">
+                <h2>Alpha Fleet Board</h2>
+                <p>Please sign in to continue</p>
+            </div>
+            <div class="login-body">
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="emailInput">Email Address</label>
+                        <input type="email" id="emailInput" class="form-input" placeholder="your.email@alpha.school" required autofocus>
+                    </div>
+                    <div class="form-group">
+                        <label for="nameInput">Your Name</label>
+                        <input type="text" id="nameInput" class="form-input" placeholder="Enter your name" required>
+                    </div>
+                    <div class="form-group" id="passwordGroup" style="display: none;">
+                        <label for="passwordInput">Admin Password</label>
+                        <input type="password" id="passwordInput" class="form-input" placeholder="Enter admin password">
+                    </div>
+                    <div id="passwordError" class="error-message" style="display: none; color: #e74c3c; font-size: 14px; margin-bottom: 10px;"></div>
+                    <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-container hidden" id="appContainer">
         <!-- Header -->
         <header class="header">
             <div class="header-content">
-                <h1>🏴‍☠️ Alpha Afterschool Fleet Board</h1>
-                <div class="header-actions">
-                    <span class="last-refresh">Last refresh: <span id="lastRefresh">--</span></span>
-                    <button id="adminToggle" class="btn btn-admin">Admin Mode</button>
-                    <button id="exportCsv" class="btn btn-secondary">Export CSV</button>
+                <h1>Alpha Afterschool Fleet Board</h1>
+                <div class="header-controls">
+                    <span class="user-info" id="userInfo"></span>
+                    <span class="last-refresh" id="lastRefresh">Last refresh: --</span>
+                    <button class="btn btn-secondary" id="adminToggle">Admin Mode</button>
+                    <button class="btn btn-secondary" id="logoutBtn">Logout</button>
                 </div>
             </div>
         </header>
 
-        <!-- Controls -->
-        <div class="controls">
-            <div class="search-filter">
-                <input type="text" id="searchInput" placeholder="🔍 Search by name..." class="search-box">
+        <!-- Controls Bar -->
+        <div class="controls-bar">
+            <div class="search-filter-group">
+                <input type="text" id="searchInput" class="search-input" placeholder="Search by name...">
+                <select id="houseFilter" class="filter-select">
+                    <option value="">All Houses</option>
+                </select>
                 <select id="statusFilter" class="filter-select">
                     <option value="">All Status</option>
                     <option value="Active">Active</option>
@@ -33,52 +65,51 @@
                     <input type="checkbox" id="urgentFilter">
                     ≤3 days remaining
                 </label>
-                <button id="addStudentBtn" class="btn btn-primary">+ Add Student</button>
             </div>
-            <div class="view-tabs">
-                <button id="boardViewBtn" class="tab-btn active">Board View</button>
-                <button id="tableViewBtn" class="tab-btn">Table View</button>
-            </div>
-        </div>
-
-        <!-- Board View -->
-        <div id="boardView" class="board-view">
-            <div class="board-columns">
-                <div class="board-column" data-status="Active">
-                    <div class="column-header">
-                        <h2>⚓ Active</h2>
-                        <span class="column-count" id="activeCount">0</span>
-                    </div>
-                    <div class="column-content" id="activeColumn" data-status="Active">
-                        <!-- Student cards will be rendered here -->
-                    </div>
-                </div>
-                <div class="board-column" data-status="PirateShip">
-                    <div class="column-header">
-                        <h2>🏴‍☠️ Pirate Ship</h2>
-                        <span class="column-count" id="pirateCount">0</span>
-                    </div>
-                    <div class="column-content" id="pirateColumn" data-status="PirateShip">
-                        <!-- Student cards will be rendered here -->
-                    </div>
-                </div>
+            <div class="action-buttons">
+                <button class="btn btn-primary" id="exportBtn">Export CSV</button>
+                <button class="btn btn-secondary" id="viewToggle">Table View</button>
             </div>
         </div>
 
-        <!-- Table View -->
-        <div id="tableView" class="table-view" style="display: none;">
-            <div class="table-actions">
-                <button id="bulkPirateShip" class="btn btn-danger" disabled>Move to Pirate Ship</button>
-                <button id="bulkRelease" class="btn btn-success" disabled>Release to Active</button>
-                <button id="bulkExtend7" class="btn btn-secondary" disabled>Extend +7 days</button>
-                <button id="bulkExtend14" class="btn btn-secondary" disabled>Extend +14 days</button>
+        <!-- Main Content -->
+        <main class="main-content" id="mainContent">
+            <!-- Kanban Board View -->
+            <div class="kanban-board" id="kanbanBoard">
+                <div class="column" id="activeColumn">
+                    <div class="column-header">
+                        <h2>Active</h2>
+                        <span class="count-badge" id="activeCount">0</span>
+                    </div>
+                    <div class="column-content" id="activeContent" data-status="Active">
+                        <!-- Student cards will be inserted here -->
+                    </div>
+                </div>
+                <div class="column" id="pirateColumn">
+                    <div class="column-header">
+                        <h2>Pirate Ship</h2>
+                        <span class="count-badge" id="pirateCount">0</span>
+                    </div>
+                    <div class="column-content" id="pirateContent" data-status="PirateShip">
+                        <!-- Student cards will be inserted here -->
+                    </div>
+                </div>
             </div>
-            <div class="table-container">
-                <table id="studentsTable">
+
+            <!-- Table View -->
+            <div class="table-view hidden" id="tableView">
+                <div class="table-controls">
+                    <button class="btn btn-primary" id="bulkMoveBtn">Move Selected to Pirate Ship</button>
+                    <button class="btn btn-primary" id="bulkReleaseBtn">Release Selected</button>
+                    <button class="btn btn-primary" id="bulkExtendBtn">Extend Selected (+7d)</button>
+                    <button class="btn btn-primary" id="bulkExtend14Btn">Extend Selected (+14d)</button>
+                </div>
+                <table class="data-table">
                     <thead>
                         <tr>
                             <th><input type="checkbox" id="selectAll"></th>
                             <th>Name</th>
+                            <th>House</th>
                             <th>Status</th>
                             <th>Pirate Start</th>
                             <th>Pirate End</th>
@@ -88,125 +119,149 @@
                         </tr>
                     </thead>
                     <tbody id="tableBody">
-                        <!-- Rows will be rendered here -->
+                        <!-- Table rows will be inserted here -->
                     </tbody>
                 </table>
             </div>
-        </div>
+        </main>
+    </div>
 
-        <!-- Undo Toast -->
-        <div id="undoToast" class="undo-toast hidden">
-            <span id="undoMessage"></span>
-            <button id="undoBtn" class="btn btn-undo">Undo</button>
-        </div>
-
-        <!-- Student Detail Drawer -->
-        <div id="detailDrawer" class="drawer hidden">
-            <div class="drawer-overlay"></div>
-            <div class="drawer-content">
-                <div class="drawer-header">
-                    <h3 id="drawerStudentName"></h3>
-                    <button id="closeDrawer" class="btn-close">✕</button>
+    <!-- Modals -->
+    <!-- Move to Pirate Ship Modal -->
+    <div class="modal" id="moveToPirateModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Move to Pirate Ship</h3>
+                <button class="modal-close" id="closeMoveModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Set sail: <strong id="moveStudentName"></strong> enters Pirate Ship.</p>
+                <div class="form-group">
+                    <label for="pirateStartDate">Start Date:</label>
+                    <input type="datetime-local" id="pirateStartDate" class="form-input">
                 </div>
-                <div class="drawer-body">
-                    <div class="student-info">
-                        <p><strong>Status:</strong> <span id="drawerStatus"></span></p>
-                        <p><strong>Pirate Start:</strong> <span id="drawerPirateStart"></span></p>
-                        <p><strong>Pirate End:</strong> <span id="drawerPirateEnd"></span></p>
-                        <p><strong>Days Remaining:</strong> <span id="drawerDaysLeft"></span></p>
+                <div class="form-group">
+                    <label for="pirateEndDate">End Date (auto-calculated):</label>
+                    <input type="datetime-local" id="pirateEndDate" class="form-input" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="moveNotes">Notes (optional):</label>
+                    <textarea id="moveNotes" class="form-input" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelMoveBtn">Cancel</button>
+                <button class="btn btn-primary" id="confirmMoveBtn">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Release Modal -->
+    <div class="modal" id="releaseModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Release from Pirate Ship</h3>
+                <button class="modal-close" id="closeReleaseModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Anchors up: <strong id="releaseStudentName"></strong> returns to Active.</p>
+                <div class="form-group">
+                    <label for="releaseNotes">Notes (optional):</label>
+                    <textarea id="releaseNotes" class="form-input" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelReleaseBtn">Cancel</button>
+                <button class="btn btn-primary" id="confirmReleaseBtn">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Move Modal -->
+    <div class="modal" id="bulkMoveModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Move Selected to Pirate Ship</h3>
+                <button class="modal-close" id="closeBulkMoveModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Moving <strong id="bulkMoveCount">0</strong> student(s) to Pirate Ship.</p>
+                <div class="form-group">
+                    <label for="bulkStartDate">Start Date:</label>
+                    <input type="datetime-local" id="bulkStartDate" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label for="bulkEndDate">End Date (auto-calculated):</label>
+                    <input type="datetime-local" id="bulkEndDate" class="form-input" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="bulkNotes">Notes (optional):</label>
+                    <textarea id="bulkNotes" class="form-input" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelBulkMoveBtn">Cancel</button>
+                <button class="btn btn-primary" id="confirmBulkMoveBtn">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detail Drawer -->
+    <div class="drawer" id="detailDrawer">
+        <div class="drawer-content">
+            <div class="drawer-header">
+                <h3 id="drawerStudentName">Student Details</h3>
+                <button class="drawer-close" id="closeDrawer">&times;</button>
+            </div>
+            <div class="drawer-body">
+                <div class="detail-section">
+                    <h4>Quick Actions</h4>
+                    <div class="action-buttons-group">
+                        <button class="btn btn-primary" id="extend7Btn">Extend +7 days</button>
+                        <button class="btn btn-primary" id="extend14Btn">Extend +14 days</button>
+                        <button class="btn btn-primary" id="releaseNowBtn">Release Now</button>
+                        <button class="btn btn-secondary" id="customDateBtn">Set Custom End Date</button>
                     </div>
-                    <div class="drawer-notes">
-                        <label><strong>Notes:</strong></label>
-                        <textarea id="drawerNotes" rows="3"></textarea>
-                        <button id="saveNotes" class="btn btn-primary">Save Notes</button>
-                    </div>
-                    <div class="drawer-actions">
-                        <h4>Quick Actions</h4>
-                        <button id="quickExtend7" class="btn btn-secondary">Extend +7 days</button>
-                        <button id="quickRelease" class="btn btn-success">Release Now</button>
-                        <button id="quickCustomEnd" class="btn btn-secondary">Set Custom End Date</button>
-                        <button id="deleteStudent" class="btn btn-danger">Delete Student</button>
-                    </div>
-                    <div class="drawer-history">
-                        <h4>Recent History</h4>
-                        <div id="historyList"></div>
+                </div>
+                <div class="detail-section">
+                    <h4>Notes</h4>
+                    <textarea id="drawerNotes" class="form-input" rows="3"></textarea>
+                    <button class="btn btn-primary" id="saveNotesBtn">Save Notes</button>
+                </div>
+                <div class="detail-section">
+                    <h4>History (Last 5 entries)</h4>
+                    <div id="historyList" class="history-list">
+                        <!-- History entries will be inserted here -->
                     </div>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Modal for Moving to Pirate Ship -->
-        <div id="pirateModal" class="modal hidden">
-            <div class="modal-overlay"></div>
-            <div class="modal-content">
-                <h3>⚓ Set Sail to Pirate Ship</h3>
-                <p id="pirateModalMessage"></p>
-                <div class="form-group">
-                    <label>Start Date:</label>
-                    <input type="datetime-local" id="pirateStartDate" class="form-control">
-                </div>
-                <div class="form-group">
-                    <label>End Date (14 days from start):</label>
-                    <input type="datetime-local" id="pirateEndDate" class="form-control" readonly>
-                </div>
-                <div class="form-group">
-                    <label>Notes (optional):</label>
-                    <textarea id="pirateNotes" class="form-control" rows="3"></textarea>
-                </div>
-                <div class="modal-actions">
-                    <button id="confirmPirate" class="btn btn-danger">Confirm</button>
-                    <button id="cancelPirate" class="btn btn-secondary">Cancel</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Modal for Releasing from Pirate Ship -->
-        <div id="releaseModal" class="modal hidden">
-            <div class="modal-overlay"></div>
-            <div class="modal-content">
-                <h3>🎉 Release from Pirate Ship</h3>
-                <p id="releaseModalMessage"></p>
-                <div class="modal-actions">
-                    <button id="confirmRelease" class="btn btn-success">Confirm Release</button>
-                    <button id="cancelRelease" class="btn btn-secondary">Cancel</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Modal for Custom End Date -->
-        <div id="customEndModal" class="modal hidden">
-            <div class="modal-overlay"></div>
-            <div class="modal-content">
+    <!-- Custom End Date Modal -->
+    <div class="modal" id="customDateModal">
+        <div class="modal-content">
+            <div class="modal-header">
                 <h3>Set Custom End Date</h3>
+                <button class="modal-close" id="closeCustomDateModal">&times;</button>
+            </div>
+            <div class="modal-body">
                 <div class="form-group">
-                    <label>New End Date:</label>
-                    <input type="datetime-local" id="customEndDate" class="form-control">
-                </div>
-                <div class="modal-actions">
-                    <button id="confirmCustomEnd" class="btn btn-primary">Confirm</button>
-                    <button id="cancelCustomEnd" class="btn btn-secondary">Cancel</button>
+                    <label for="customEndDate">End Date:</label>
+                    <input type="datetime-local" id="customEndDate" class="form-input">
                 </div>
             </div>
-        </div>
-
-        <!-- Add Student Modal -->
-        <div id="addStudentModal" class="modal hidden">
-            <div class="modal-overlay"></div>
-            <div class="modal-content">
-                <h3>Add New Student</h3>
-                <div class="form-group">
-                    <label>Full Name:</label>
-                    <input type="text" id="newStudentName" class="form-control" placeholder="Enter student name">
-                </div>
-                <div class="modal-actions">
-                    <button id="confirmAddStudent" class="btn btn-primary">Add Student</button>
-                    <button id="cancelAddStudent" class="btn btn-secondary">Cancel</button>
-                </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelCustomDateBtn">Cancel</button>
+                <button class="btn btn-primary" id="confirmCustomDateBtn">Confirm</button>
             </div>
         </div>
+    </div>
 
-        <!-- Read-Only Tooltip -->
-        <div id="readonlyTooltip" class="tooltip hidden">Read-only. Ask a guide to update.</div>
+    <!-- Toast Notification -->
+    <div class="toast" id="toast">
+        <span id="toastMessage"></span>
+        <button class="btn btn-small" id="undoBtn">Undo</button>
     </div>
 
     <script src="app.js"></script>

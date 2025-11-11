@@ -1,154 +1,1005 @@
-// Alpha Fleet Board - Pirate Ship App
-// Data Models and State
-
+// State Management
 let students = [];
 let auditLog = [];
-let isAdminMode = true; // Start in Admin Mode by default
-let currentStudent = null;
-let undoAction = null;
-let undoTimer = null;
+let isAdminMode = false;
+let currentView = 'kanban'; // 'kanban' or 'table'
+let lastUndoAction = null;
+let currentDrawerStudentId = null;
+let currentUser = null;
 
-// Initialize seed data
-function initializeSeedData() {
-    const firstNames = ['Alex', 'Jordan', 'Taylor', 'Morgan', 'Casey', 'Riley', 'Sam', 'Drew', 'Avery', 'Charlie', 'Dakota', 'Emerson', 'Finley', 'Harper', 'Jamie', 'Kai', 'Logan', 'Skyler', 'Quinn', 'Reese'];
-    const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin'];
+// Admin emails
+const ADMIN_EMAILS = [
+    'jebin.justin@alpha.school',
+    'garrett.rigby@alpha.school'
+];
 
-    students = [];
+// Admin password
+const ADMIN_PASSWORD = '2hrlearning';
+
+// Initialize App
+document.addEventListener('DOMContentLoaded', () => {
+    checkAuth();
+    initializeEventListeners();
+});
+
+// Authentication
+function checkAuth() {
+    const savedUser = sessionStorage.getItem('alphaFleetUser');
+    if (savedUser) {
+        currentUser = JSON.parse(savedUser);
+        showApp();
+    } else {
+        showLogin();
+    }
+}
+
+function showLogin() {
+    document.getElementById('loginModal').classList.remove('hidden');
+    document.getElementById('appContainer').classList.add('hidden');
+}
+
+function showApp() {
+    document.getElementById('loginModal').classList.add('hidden');
+    document.getElementById('appContainer').classList.remove('hidden');
     
-    for (let i = 0; i < 18; i++) {
-        const firstName = firstNames[i % firstNames.length];
-        const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
+    // Update UI based on user
+    updateUserInfo();
+    updateAdminUI();
+    
+    // Initialize app
+    loadData();
+    renderBoard();
+    updateLastRefresh();
+    startAutoRelease();
+    populateHouseFilter();
+}
+
+function isAdmin(email) {
+    return ADMIN_EMAILS.includes(email.toLowerCase());
+}
+
+function updateUserInfo() {
+    if (currentUser) {
+        const userInfo = document.getElementById('userInfo');
+        const isUserAdmin = isAdmin(currentUser.email);
+        userInfo.textContent = `${currentUser.name}${isUserAdmin ? ' (Admin)' : ''}`;
+    }
+}
+
+function updateAdminUI() {
+    const adminToggle = document.getElementById('adminToggle');
+    const isUserAdmin = currentUser && isAdmin(currentUser.email);
+    
+    if (isUserAdmin) {
+        adminToggle.style.display = 'inline-block';
+        adminToggle.disabled = false;
+    } else {
+        adminToggle.style.display = 'none';
+        isAdminMode = false;
+    }
+    
+    // Hide bulk action buttons for non-admins
+    const bulkButtons = document.querySelectorAll('#bulkMoveBtn, #bulkReleaseBtn, #bulkExtendBtn, #bulkExtend14Btn');
+    bulkButtons.forEach(btn => {
+        if (btn) {
+            btn.style.display = isUserAdmin ? 'inline-block' : 'none';
+        }
+    });
+    
+    // Hide select all checkbox for non-admins
+    const selectAllCheckbox = document.getElementById('selectAll');
+    if (selectAllCheckbox) {
+        const th = selectAllCheckbox.closest('th');
+        if (th) {
+            th.style.display = isUserAdmin ? 'table-cell' : 'none';
+        }
+    }
+    
+    // Hide checkboxes in table rows for non-admins
+    document.querySelectorAll('.row-checkbox').forEach(cb => {
+        const td = cb.closest('td');
+        if (td) {
+            td.style.display = isUserAdmin ? 'table-cell' : 'none';
+        }
+    });
+}
+
+function handleLogin(email, name) {
+    currentUser = {
+        email: email.toLowerCase(),
+        name: name
+    };
+    sessionStorage.setItem('alphaFleetUser', JSON.stringify(currentUser));
+    showApp();
+}
+
+function handleLogout() {
+    currentUser = null;
+    isAdminMode = false;
+    sessionStorage.removeItem('alphaFleetUser');
+    showLogin();
+    // Clear form
+    document.getElementById('loginForm').reset();
+    document.getElementById('passwordGroup').style.display = 'none';
+    document.getElementById('passwordError').style.display = 'none';
+}
+
+// Data Persistence
+function saveData() {
+    localStorage.setItem('alphaFleetStudents', JSON.stringify(students));
+    localStorage.setItem('alphaFleetAuditLog', JSON.stringify(auditLog));
+}
+
+function loadData() {
+    const savedStudents = localStorage.getItem('alphaFleetStudents');
+    const savedAuditLog = localStorage.getItem('alphaFleetAuditLog');
+    
+    if (savedStudents) {
+        students = JSON.parse(savedStudents);
+    } else {
+        seedData();
+        saveData();
+    }
+    
+    if (savedAuditLog) {
+        auditLog = JSON.parse(savedAuditLog);
+    }
+}
+
+function seedData() {
+    const houses = ['House A', 'House B', 'House C'];
+    const names = [
+        'Alice Johnson', 'Bob Smith', 'Charlie Brown', 'Diana Prince', 'Ethan Hunt',
+        'Fiona Apple', 'George Washington', 'Hannah Montana', 'Isaac Newton', 'Julia Roberts',
+        'Kevin Hart', 'Luna Lovegood', 'Michael Jordan', 'Nina Simone', 'Oliver Twist',
+        'Penelope Cruz', 'Quinn Fabray', 'Rachel Green', 'Steve Jobs', 'Tina Fey'
+    ];
+    
+    students = [];
+    for (let i = 0; i < 15; i++) {
+        const status = i < 10 ? 'Active' : 'PirateShip';
+        const now = new Date();
+        let pirateStart = null;
+        let pirateEnd = null;
         
-        // Make some students already in Pirate Ship
-        const isPirate = i < 5;
-        const pirateStart = isPirate ? new Date(Date.now() - Math.random() * 10 * 24 * 60 * 60 * 1000) : null;
-        const pirateEnd = isPirate ? new Date(pirateStart.getTime() + 14 * 24 * 60 * 60 * 1000) : null;
+        if (status === 'PirateShip') {
+            pirateStart = new Date(now.getTime() - (i - 9) * 2 * 24 * 60 * 60 * 1000);
+            pirateEnd = new Date(pirateStart.getTime() + 14 * 24 * 60 * 60 * 1000);
+        }
         
         students.push({
-            id: `student-${Date.now()}-${i}`,
-            full_name: `${firstName} ${lastName}`,
-            status: isPirate ? 'PirateShip' : 'Active',
+            id: `student-${i + 1}`,
+            full_name: names[i],
+            house_or_group: houses[i % 3],
+            status: status,
             pirate_start: pirateStart ? pirateStart.toISOString() : null,
             pirate_end: pirateEnd ? pirateEnd.toISOString() : null,
             notes: '',
             last_updated_by: 'System',
-            last_updated_at: new Date().toISOString()
+            last_updated_at: now.toISOString()
         });
     }
-
-    auditLog = [{
-        timestamp: new Date().toISOString(),
-        student_id: null,
-        action: 'System Initialized',
-        actor: 'System',
-        old_values: null,
-        new_values: null
-    }];
-
-    saveToLocalStorage();
+    
+    auditLog = [];
 }
 
-// JSON File Storage (works for both local and Vercel)
-async function saveToJSON() {
-    const data = {
-        students: students,
-        auditLog: auditLog,
-        lastUpdated: new Date().toISOString()
-    };
-    
-    // Always save to localStorage as primary storage for client-side persistence
-    localStorage.setItem('alpha_fleet_students', JSON.stringify(students));
-    localStorage.setItem('alpha_fleet_audit', JSON.stringify(auditLog));
-    localStorage.setItem('alpha_fleet_last_updated', new Date().toISOString());
-    
-    // Also try to sync with server if available
-    try {
-        const response = await fetch('/save-data', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data)
-        });
+// Event Listeners
+function initializeEventListeners() {
+    // Show/hide password field based on email
+    document.getElementById('emailInput').addEventListener('input', (e) => {
+        const email = e.target.value.trim().toLowerCase();
+        const passwordGroup = document.getElementById('passwordGroup');
+        const passwordInput = document.getElementById('passwordInput');
+        const passwordError = document.getElementById('passwordError');
         
-        if (response.ok) {
-            console.log('✅ Data synced to server');
+        if (isAdmin(email)) {
+            passwordGroup.style.display = 'block';
+            passwordInput.required = true;
+        } else {
+            passwordGroup.style.display = 'none';
+            passwordInput.required = false;
+            passwordInput.value = '';
+            passwordError.style.display = 'none';
         }
-    } catch (error) {
-        // Server not available, localStorage is sufficient
-        console.log('💾 Data saved to localStorage (server unavailable)');
-    }
+    });
+    
+    // Login form
+    document.getElementById('loginForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const email = document.getElementById('emailInput').value.trim();
+        const name = document.getElementById('nameInput').value.trim();
+        const password = document.getElementById('passwordInput').value;
+        const passwordError = document.getElementById('passwordError');
+        
+        if (!email || !name) {
+            return;
+        }
+        
+        // Check if admin and validate password
+        if (isAdmin(email)) {
+            if (password !== ADMIN_PASSWORD) {
+                passwordError.textContent = 'Incorrect admin password';
+                passwordError.style.display = 'block';
+                return;
+            }
+            passwordError.style.display = 'none';
+        }
+        
+        handleLogin(email, name);
+    });
+    
+    // Logout
+    document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+    
+    // Admin toggle
+    document.getElementById('adminToggle').addEventListener('click', toggleAdminMode);
+    
+    // View toggle
+    document.getElementById('viewToggle').addEventListener('click', toggleView);
+    
+    // Search and filters
+    document.getElementById('searchInput').addEventListener('input', renderBoard);
+    document.getElementById('houseFilter').addEventListener('change', renderBoard);
+    document.getElementById('statusFilter').addEventListener('change', renderBoard);
+    document.getElementById('urgentFilter').addEventListener('change', renderBoard);
+    
+    // Export
+    document.getElementById('exportBtn').addEventListener('click', exportCSV);
+    
+    // Modal close buttons
+    document.getElementById('closeMoveModal').addEventListener('click', closeMoveModal);
+    document.getElementById('closeReleaseModal').addEventListener('click', closeReleaseModal);
+    document.getElementById('closeBulkMoveModal').addEventListener('click', closeBulkMoveModal);
+    document.getElementById('closeCustomDateModal').addEventListener('click', closeCustomDateModal);
+    document.getElementById('cancelMoveBtn').addEventListener('click', closeMoveModal);
+    document.getElementById('cancelReleaseBtn').addEventListener('click', closeReleaseModal);
+    document.getElementById('cancelBulkMoveBtn').addEventListener('click', closeBulkMoveModal);
+    document.getElementById('cancelCustomDateBtn').addEventListener('click', closeCustomDateModal);
+    
+    // Modal confirm buttons
+    document.getElementById('confirmMoveBtn').addEventListener('click', confirmMoveToPirate);
+    document.getElementById('confirmReleaseBtn').addEventListener('click', confirmRelease);
+    document.getElementById('confirmBulkMoveBtn').addEventListener('click', confirmBulkMove);
+    document.getElementById('confirmCustomDateBtn').addEventListener('click', confirmCustomDate);
+    
+    // Drawer
+    document.getElementById('closeDrawer').addEventListener('click', closeDrawer);
+    
+    // Detail drawer actions
+    document.getElementById('extend7Btn').addEventListener('click', () => extendPirateShip(7));
+    document.getElementById('extend14Btn').addEventListener('click', () => extendPirateShip(14));
+    document.getElementById('releaseNowBtn').addEventListener('click', releaseFromDrawer);
+    document.getElementById('customDateBtn').addEventListener('click', openCustomDateModal);
+    document.getElementById('saveNotesBtn').addEventListener('click', saveNotes);
+    
+    // Bulk actions
+    document.getElementById('bulkMoveBtn').addEventListener('click', openBulkMoveModal);
+    document.getElementById('bulkReleaseBtn').addEventListener('click', bulkRelease);
+    document.getElementById('bulkExtendBtn').addEventListener('click', () => bulkExtend(7));
+    document.getElementById('bulkExtend14Btn').addEventListener('click', () => bulkExtend(14));
+    document.getElementById('selectAll').addEventListener('change', toggleSelectAll);
+    
+    // Undo
+    document.getElementById('undoBtn').addEventListener('click', undoLastAction);
+    
+    // Close modals on backdrop click
+    document.getElementById('moveToPirateModal').addEventListener('click', (e) => {
+        if (e.target.id === 'moveToPirateModal') closeMoveModal();
+    });
+    document.getElementById('releaseModal').addEventListener('click', (e) => {
+        if (e.target.id === 'releaseModal') closeReleaseModal();
+    });
+    document.getElementById('bulkMoveModal').addEventListener('click', (e) => {
+        if (e.target.id === 'bulkMoveModal') closeBulkMoveModal();
+    });
+    document.getElementById('customDateModal').addEventListener('click', (e) => {
+        if (e.target.id === 'customDateModal') closeCustomDateModal();
+    });
+    
+    // Pirate start date change handler
+    document.getElementById('pirateStartDate').addEventListener('change', updatePirateEndDate);
+    document.getElementById('bulkStartDate').addEventListener('change', updateBulkEndDate);
 }
 
-async function loadFromJSON() {
-    // Try localStorage first (primary storage for client-side app)
-    const savedStudents = localStorage.getItem('alpha_fleet_students');
-    const savedAudit = localStorage.getItem('alpha_fleet_audit');
-    
-    if (savedStudents) {
-        students = JSON.parse(savedStudents);
-        auditLog = JSON.parse(savedAudit || '[]');
-        console.log('📦 Loaded data from localStorage');
-        console.log(`   Students: ${students.length}, Audit logs: ${auditLog.length}`);
+// Admin Mode
+function toggleAdminMode() {
+    if (!currentUser || !isAdmin(currentUser.email)) {
+        alert('Admin access only. Please contact an administrator.');
         return;
     }
     
-    // If no localStorage data, try loading from server
-    try {
-        const response = await fetch('/data.json');
-        if (response.ok) {
-            const data = await response.json();
-            if (data.students && data.students.length > 0) {
-                students = data.students;
-                auditLog = data.auditLog || [];
-                console.log('📄 Loaded data from server JSON file');
-                // Save to localStorage for future use
-                saveToJSON();
-                return;
-            }
-        }
-    } catch (error) {
-        console.log('ℹ️ No server data available');
+    isAdminMode = !isAdminMode;
+    const btn = document.getElementById('adminToggle');
+    btn.textContent = isAdminMode ? 'Exit Admin Mode' : 'Admin Mode';
+    btn.classList.toggle('btn-success', isAdminMode);
+    renderBoard();
+}
+
+// View Toggle
+function toggleView() {
+    currentView = currentView === 'kanban' ? 'table' : 'kanban';
+    const btn = document.getElementById('viewToggle');
+    btn.textContent = currentView === 'kanban' ? 'Table View' : 'Kanban View';
+    renderBoard();
+}
+
+// Rendering
+function renderBoard() {
+    if (currentView === 'kanban') {
+        renderKanbanBoard();
+    } else {
+        renderTableView();
+    }
+    updateCounts();
+}
+
+function renderKanbanBoard() {
+    const activeContent = document.getElementById('activeContent');
+    const pirateContent = document.getElementById('pirateContent');
+    
+    activeContent.innerHTML = '';
+    pirateContent.innerHTML = '';
+    
+    const filtered = getFilteredStudents();
+    const activeStudents = filtered.filter(s => s.status === 'Active').sort((a, b) => 
+        a.full_name.localeCompare(b.full_name)
+    );
+    const pirateStudents = filtered.filter(s => s.status === 'PirateShip').sort((a, b) => {
+        const daysA = getDaysRemaining(a);
+        const daysB = getDaysRemaining(b);
+        return daysA - daysB;
+    });
+    
+    activeStudents.forEach(student => {
+        activeContent.appendChild(createStudentCard(student));
+    });
+    
+    pirateStudents.forEach(student => {
+        pirateContent.appendChild(createStudentCard(student));
+    });
+    
+    // Show/hide views
+    document.getElementById('kanbanBoard').classList.remove('hidden');
+    document.getElementById('tableView').classList.add('hidden');
+}
+
+function renderTableView() {
+    const tableBody = document.getElementById('tableBody');
+    tableBody.innerHTML = '';
+    
+    const filtered = getFilteredStudents();
+    const isUserAdmin = currentUser && isAdmin(currentUser.email);
+    
+    filtered.forEach(student => {
+        const row = document.createElement('tr');
+        const daysLeft = student.status === 'PirateShip' ? getDaysRemaining(student) : '-';
+        const startDate = student.pirate_start ? new Date(student.pirate_start).toLocaleDateString() : '-';
+        const endDate = student.pirate_end ? new Date(student.pirate_end).toLocaleDateString() : '-';
+        
+        row.innerHTML = `
+            <td style="display: ${isUserAdmin ? 'table-cell' : 'none'}"><input type="checkbox" class="row-checkbox" data-id="${student.id}"></td>
+            <td>${student.full_name}</td>
+            <td>${student.house_or_group}</td>
+            <td><span class="status-chip ${student.status === 'Active' ? 'active' : 'pirate-ship'}">${student.status === 'Active' ? 'Active' : 'Pirate Ship'}</span></td>
+            <td>${startDate}</td>
+            <td>${endDate}</td>
+            <td>${daysLeft === '-' ? '-' : `${daysLeft} days`}</td>
+            <td>${student.notes || '-'}</td>
+            <td>
+                <button class="btn btn-small btn-secondary view-detail" data-id="${student.id}">View</button>
+            </td>
+        `;
+        
+        tableBody.appendChild(row);
+    });
+    
+    // Add event listeners for checkboxes and view buttons
+    document.querySelectorAll('.row-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateBulkActionButtons);
+    });
+    document.querySelectorAll('.view-detail').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            openDrawer(e.target.dataset.id);
+        });
+    });
+    
+    // Show/hide views
+    document.getElementById('kanbanBoard').classList.add('hidden');
+    document.getElementById('tableView').classList.remove('hidden');
+    
+    // Update admin UI after rendering
+    updateAdminUI();
+}
+
+function createStudentCard(student) {
+    const card = document.createElement('div');
+    card.className = `student-card ${student.status === 'Active' ? 'active' : 'pirate-ship'} ${!isAdminMode ? 'read-only' : ''}`;
+    card.draggable = isAdminMode;
+    card.dataset.id = student.id;
+    
+    if (isAdminMode) {
+        card.addEventListener('dragstart', handleDragStart);
+        card.addEventListener('dragend', handleDragEnd);
     }
     
-    // If no data found anywhere, initialize with seed data
-    console.log('🌱 Initializing with seed data');
-    initializeSeedData();
-}
-
-// Keep the old function name for compatibility
-function saveToLocalStorage() {
-    saveToJSON();
-}
-
-function loadFromLocalStorage() {
-    return loadFromJSON();
-}
-
-// Audit logging
-function logAction(studentId, action, actor, oldValues, newValues) {
-    auditLog.push({
-        timestamp: new Date().toISOString(),
-        student_id: studentId,
-        action,
-        actor,
-        old_values: oldValues,
-        new_values: newValues
+    const daysRemaining = student.status === 'PirateShip' ? getDaysRemaining(student) : null;
+    const countdownBadge = daysRemaining !== null ? createCountdownBadge(daysRemaining, student) : '';
+    const pirateDates = student.status === 'PirateShip' && student.pirate_start ? 
+        `<div class="pirate-dates">Started: ${new Date(student.pirate_start).toLocaleDateString()}</div>` : '';
+    
+    card.innerHTML = `
+        <div class="card-header">
+            <div>
+                <div class="card-name">${student.full_name}</div>
+                <span class="card-house">${student.house_or_group}</span>
+            </div>
+        </div>
+        <div class="card-body">
+            <span class="status-chip ${student.status === 'Active' ? 'active' : 'pirate-ship'}">${student.status === 'Active' ? 'Active' : 'Pirate Ship'}</span>
+            ${countdownBadge}
+            ${pirateDates}
+        </div>
+        <div class="card-actions">
+            <button class="btn btn-small btn-secondary view-detail" data-id="${student.id}">Details</button>
+        </div>
+    `;
+    
+    card.querySelector('.view-detail').addEventListener('click', (e) => {
+        openDrawer(e.target.dataset.id);
     });
-    saveToLocalStorage();
+    
+    // Column drop zones
+    const activeColumn = document.getElementById('activeContent');
+    const pirateColumn = document.getElementById('pirateContent');
+    
+    if (isAdminMode) {
+        activeColumn.addEventListener('dragover', handleDragOver);
+        activeColumn.addEventListener('drop', handleDrop);
+        activeColumn.addEventListener('dragleave', handleDragLeave);
+        pirateColumn.addEventListener('dragover', handleDragOver);
+        pirateColumn.addEventListener('drop', handleDrop);
+        pirateColumn.addEventListener('dragleave', handleDragLeave);
+    }
+    
+    return card;
 }
 
-// Calculate days remaining
-function getDaysRemaining(endDate) {
-    if (!endDate) return null;
-    const end = new Date(endDate);
+function createCountdownBadge(days, student) {
+    let className = 'normal';
+    if (days <= 3) className = 'urgent';
+    else if (days <= 7) className = 'warning';
+    
+    return `<span class="countdown-badge ${className}">⏳ ${days} days left</span>`;
+}
+
+function getDaysRemaining(student) {
+    if (!student.pirate_end) return null;
+    const end = new Date(student.pirate_end);
     const now = new Date();
-    const diff = end - now;
-    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+    const diff = Math.ceil((end - now) / (1000 * 60 * 60 * 24));
+    return diff > 0 ? diff : 0;
 }
 
-// Auto-release students
-function autoReleaseExpiredStudents() {
+// Drag and Drop
+let draggedStudent = null;
+
+function handleDragStart(e) {
+    draggedStudent = e.target.dataset.id;
+    e.target.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleDragEnd(e) {
+    e.target.classList.remove('dragging');
+    document.querySelectorAll('.column-content').forEach(col => {
+        col.classList.remove('drag-over');
+    });
+}
+
+function handleDragOver(e) {
+    if (e.preventDefault) e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    e.currentTarget.classList.add('drag-over');
+}
+
+function handleDragLeave(e) {
+    e.currentTarget.classList.remove('drag-over');
+}
+
+function handleDrop(e) {
+    if (e.stopPropagation) e.stopPropagation();
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    
+    if (!draggedStudent) return;
+    
+    const student = students.find(s => s.id === draggedStudent);
+    if (!student) return;
+    
+    const targetStatus = e.currentTarget.dataset.status;
+    
+    if (student.status === targetStatus) return;
+    
+    if (targetStatus === 'PirateShip') {
+        openMoveToPirateModal(student);
+    } else if (targetStatus === 'Active') {
+        openReleaseModal(student);
+    }
+    
+    draggedStudent = null;
+}
+
+// Modals
+function openMoveToPirateModal(student) {
+    const modal = document.getElementById('moveToPirateModal');
+    document.getElementById('moveStudentName').textContent = student.full_name;
+    
+    const now = new Date();
+    const startDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    const endDate = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000 - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    
+    document.getElementById('pirateStartDate').value = startDate;
+    document.getElementById('pirateEndDate').value = endDate;
+    document.getElementById('moveNotes').value = '';
+    
+    modal.dataset.studentId = student.id;
+    modal.classList.add('active');
+}
+
+function closeMoveModal() {
+    document.getElementById('moveToPirateModal').classList.remove('active');
+}
+
+function updatePirateEndDate() {
+    const startDate = document.getElementById('pirateStartDate').value;
+    if (startDate) {
+        const start = new Date(startDate);
+        const end = new Date(start.getTime() + 14 * 24 * 60 * 60 * 1000);
+        const endDateStr = new Date(end.getTime() - end.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        document.getElementById('pirateEndDate').value = endDateStr;
+    }
+}
+
+function confirmMoveToPirate() {
+    const modal = document.getElementById('moveToPirateModal');
+    const studentId = modal.dataset.studentId;
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
+    
+    const startDate = document.getElementById('pirateStartDate').value;
+    const endDate = document.getElementById('pirateEndDate').value;
+    const notes = document.getElementById('moveNotes').value;
+    
+    if (!startDate || !endDate) {
+        alert('Please select a start date');
+        return;
+    }
+    
+    const oldValues = { ...student };
+    student.status = 'PirateShip';
+    student.pirate_start = new Date(startDate).toISOString();
+    student.pirate_end = new Date(endDate).toISOString();
+    student.notes = notes;
+    student.last_updated_by = currentUser ? currentUser.name : 'System';
+    student.last_updated_at = new Date().toISOString();
+    
+    logAudit(student.id, 'Move to Pirate Ship', oldValues, { ...student });
+    saveData();
+    renderBoard();
+    closeMoveModal();
+    showToast(`Set sail: ${student.full_name} enters Pirate Ship until ${new Date(endDate).toLocaleDateString()}.`);
+}
+
+function openReleaseModal(student) {
+    const modal = document.getElementById('releaseModal');
+    document.getElementById('releaseStudentName').textContent = student.full_name;
+    document.getElementById('releaseNotes').value = '';
+    modal.dataset.studentId = student.id;
+    modal.classList.add('active');
+}
+
+function closeReleaseModal() {
+    document.getElementById('releaseModal').classList.remove('active');
+}
+
+function confirmRelease() {
+    const modal = document.getElementById('releaseModal');
+    const studentId = modal.dataset.studentId;
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
+    
+    const notes = document.getElementById('releaseNotes').value;
+    
+    const oldValues = { ...student };
+    student.status = 'Active';
+    student.pirate_start = null;
+    student.pirate_end = null;
+    if (notes) student.notes = notes;
+    student.last_updated_by = currentUser ? currentUser.name : 'System';
+    student.last_updated_at = new Date().toISOString();
+    
+    logAudit(student.id, 'Release from Pirate Ship', oldValues, { ...student });
+    saveData();
+    renderBoard();
+    closeReleaseModal();
+    showToast(`Anchors up: ${student.full_name} returns to Active.`);
+}
+
+// Bulk Actions
+function openBulkMoveModal() {
+    if (!currentUser || !isAdmin(currentUser.email)) {
+        alert('Admin access only. Please contact an administrator.');
+        return;
+    }
+    
+    const selected = getSelectedStudents();
+    if (selected.length === 0) {
+        alert('Please select at least one student');
+        return;
+    }
+    
+    const modal = document.getElementById('bulkMoveModal');
+    document.getElementById('bulkMoveCount').textContent = selected.length;
+    
+    const now = new Date();
+    const startDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    const endDate = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000 - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    
+    document.getElementById('bulkStartDate').value = startDate;
+    document.getElementById('bulkEndDate').value = endDate;
+    document.getElementById('bulkNotes').value = '';
+    
+    modal.classList.add('active');
+}
+
+function closeBulkMoveModal() {
+    document.getElementById('bulkMoveModal').classList.remove('active');
+}
+
+function updateBulkEndDate() {
+    const startDate = document.getElementById('bulkStartDate').value;
+    if (startDate) {
+        const start = new Date(startDate);
+        const end = new Date(start.getTime() + 14 * 24 * 60 * 60 * 1000);
+        const endDateStr = new Date(end.getTime() - end.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        document.getElementById('bulkEndDate').value = endDateStr;
+    }
+}
+
+function confirmBulkMove() {
+    const selected = getSelectedStudents();
+    if (selected.length === 0) return;
+    
+    const startDate = document.getElementById('bulkStartDate').value;
+    const endDate = document.getElementById('bulkEndDate').value;
+    const notes = document.getElementById('bulkNotes').value;
+    
+    if (!startDate || !endDate) {
+        alert('Please select a start date');
+        return;
+    }
+    
+    selected.forEach(studentId => {
+        const student = students.find(s => s.id === studentId);
+        if (!student) return;
+        
+        const oldValues = { ...student };
+        student.status = 'PirateShip';
+        student.pirate_start = new Date(startDate).toISOString();
+        student.pirate_end = new Date(endDate).toISOString();
+        if (notes) student.notes = notes;
+        student.last_updated_by = currentUser ? currentUser.name : 'System';
+        student.last_updated_at = new Date().toISOString();
+        
+        logAudit(student.id, 'Bulk Move to Pirate Ship', oldValues, { ...student });
+    });
+    
+    saveData();
+    renderBoard();
+    closeBulkMoveModal();
+    showToast(`Moved ${selected.length} student(s) to Pirate Ship.`);
+}
+
+function bulkRelease() {
+    if (!currentUser || !isAdmin(currentUser.email)) {
+        alert('Admin access only. Please contact an administrator.');
+        return;
+    }
+    
+    const selected = getSelectedStudents();
+    if (selected.length === 0) {
+        alert('Please select at least one student');
+        return;
+    }
+    
+    if (!confirm(`Release ${selected.length} student(s) from Pirate Ship?`)) return;
+    
+    selected.forEach(studentId => {
+        const student = students.find(s => s.id === studentId);
+        if (!student || student.status !== 'PirateShip') return;
+        
+        const oldValues = { ...student };
+        student.status = 'Active';
+        student.pirate_start = null;
+        student.pirate_end = null;
+        student.last_updated_by = currentUser ? currentUser.name : 'System';
+        student.last_updated_at = new Date().toISOString();
+        
+        logAudit(student.id, 'Bulk Release', oldValues, { ...student });
+    });
+    
+    saveData();
+    renderBoard();
+    showToast(`Released ${selected.length} student(s) from Pirate Ship.`);
+}
+
+function bulkExtend(days) {
+    if (!currentUser || !isAdmin(currentUser.email)) {
+        alert('Admin access only. Please contact an administrator.');
+        return;
+    }
+    
+    const selected = getSelectedStudents();
+    if (selected.length === 0) {
+        alert('Please select at least one student');
+        return;
+    }
+    
+    selected.forEach(studentId => {
+        const student = students.find(s => s.id === studentId);
+        if (!student || student.status !== 'PirateShip' || !student.pirate_end) return;
+        
+        const oldValues = { ...student };
+        const currentEnd = new Date(student.pirate_end);
+        student.pirate_end = new Date(currentEnd.getTime() + days * 24 * 60 * 60 * 1000).toISOString();
+        student.last_updated_by = currentUser ? currentUser.name : 'System';
+        student.last_updated_at = new Date().toISOString();
+        
+        logAudit(student.id, `Extend +${days} days`, oldValues, { ...student });
+    });
+    
+    saveData();
+    renderBoard();
+    showToast(`Extended ${selected.length} student(s) by ${days} days.`);
+}
+
+function getSelectedStudents() {
+    return Array.from(document.querySelectorAll('.row-checkbox:checked')).map(cb => cb.dataset.id);
+}
+
+function toggleSelectAll() {
+    const selectAll = document.getElementById('selectAll');
+    document.querySelectorAll('.row-checkbox').forEach(cb => {
+        cb.checked = selectAll.checked;
+    });
+    updateBulkActionButtons();
+}
+
+function updateBulkActionButtons() {
+    const selected = getSelectedStudents();
+    // Buttons are always enabled, but we could disable them if needed
+}
+
+// Detail Drawer
+function openDrawer(studentId) {
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
+    
+    currentDrawerStudentId = studentId;
+    const drawer = document.getElementById('detailDrawer');
+    document.getElementById('drawerStudentName').textContent = student.full_name;
+    document.getElementById('drawerNotes').value = student.notes || '';
+    
+    // Show/hide admin-only actions
+    const isUserAdmin = currentUser && isAdmin(currentUser.email);
+    const quickActions = document.querySelector('.action-buttons-group');
+    if (quickActions) {
+        quickActions.style.display = isUserAdmin ? 'flex' : 'none';
+    }
+    const notesSection = document.querySelector('.detail-section:nth-of-type(2)');
+    if (notesSection) {
+        const saveNotesBtn = document.getElementById('saveNotesBtn');
+        if (saveNotesBtn) {
+            saveNotesBtn.style.display = isUserAdmin ? 'inline-block' : 'none';
+        }
+        if (!isUserAdmin) {
+            document.getElementById('drawerNotes').readOnly = true;
+        } else {
+            document.getElementById('drawerNotes').readOnly = false;
+        }
+    }
+    
+    // Render history
+    const historyList = document.getElementById('historyList');
+    historyList.innerHTML = '';
+    const studentHistory = auditLog
+        .filter(log => log.student_id === studentId)
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        .slice(0, 5);
+    
+    if (studentHistory.length === 0) {
+        historyList.innerHTML = '<p style="color: #666; font-size: 14px;">No history available.</p>';
+    } else {
+        studentHistory.forEach(log => {
+            const item = document.createElement('div');
+            item.className = 'history-item';
+            item.innerHTML = `
+                <div class="history-time">${new Date(log.timestamp).toLocaleString()}</div>
+                <div class="history-action">${log.action} by ${log.actor}</div>
+            `;
+            historyList.appendChild(item);
+        });
+    }
+    
+    drawer.classList.add('active');
+}
+
+function closeDrawer() {
+    document.getElementById('detailDrawer').classList.remove('active');
+    currentDrawerStudentId = null;
+}
+
+function extendPirateShip(days) {
+    if (!currentUser || !isAdmin(currentUser.email)) {
+        alert('Admin access only. Please contact an administrator.');
+        return;
+    }
+    
+    if (!currentDrawerStudentId) return;
+    const student = students.find(s => s.id === currentDrawerStudentId);
+    if (!student || student.status !== 'PirateShip' || !student.pirate_end) {
+        alert('Student is not in Pirate Ship');
+        return;
+    }
+    
+    const oldValues = { ...student };
+    const currentEnd = new Date(student.pirate_end);
+    student.pirate_end = new Date(currentEnd.getTime() + days * 24 * 60 * 60 * 1000).toISOString();
+    student.last_updated_by = currentUser ? currentUser.name : 'System';
+    student.last_updated_at = new Date().toISOString();
+    
+    logAudit(student.id, `Extend +${days} days`, oldValues, { ...student });
+    saveData();
+    renderBoard();
+    openDrawer(currentDrawerStudentId);
+    showToast(`Extended ${student.full_name} by ${days} days.`);
+}
+
+function releaseFromDrawer() {
+    if (!currentDrawerStudentId) return;
+    const student = students.find(s => s.id === currentDrawerStudentId);
+    if (!student) return;
+    
+    openReleaseModal(student);
+    closeDrawer();
+}
+
+function openCustomDateModal() {
+    if (!currentUser || !isAdmin(currentUser.email)) {
+        alert('Admin access only. Please contact an administrator.');
+        return;
+    }
+    
+    if (!currentDrawerStudentId) return;
+    const student = students.find(s => s.id === currentDrawerStudentId);
+    if (!student || student.status !== 'PirateShip') {
+        alert('Student is not in Pirate Ship');
+        return;
+    }
+    
+    const modal = document.getElementById('customDateModal');
+    const currentEnd = student.pirate_end ? new Date(student.pirate_end) : new Date();
+    const endDateStr = new Date(currentEnd.getTime() - currentEnd.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    document.getElementById('customEndDate').value = endDateStr;
+    modal.classList.add('active');
+}
+
+function closeCustomDateModal() {
+    document.getElementById('customDateModal').classList.remove('active');
+}
+
+function confirmCustomDate() {
+    if (!currentDrawerStudentId) return;
+    const student = students.find(s => s.id === currentDrawerStudentId);
+    if (!student) return;
+    
+    const endDate = document.getElementById('customEndDate').value;
+    if (!endDate) {
+        alert('Please select an end date');
+        return;
+    }
+    
+    const oldValues = { ...student };
+    student.pirate_end = new Date(endDate).toISOString();
+    student.last_updated_by = currentUser ? currentUser.name : 'System';
+    student.last_updated_at = new Date().toISOString();
+    
+    logAudit(student.id, 'Set Custom End Date', oldValues, { ...student });
+    saveData();
+    renderBoard();
+    closeCustomDateModal();
+    openDrawer(currentDrawerStudentId);
+    showToast(`Updated end date for ${student.full_name}.`);
+}
+
+function saveNotes() {
+    if (!currentUser || !isAdmin(currentUser.email)) {
+        alert('Admin access only. Please contact an administrator.');
+        return;
+    }
+    
+    if (!currentDrawerStudentId) return;
+    const student = students.find(s => s.id === currentDrawerStudentId);
+    if (!student) return;
+    
+    const notes = document.getElementById('drawerNotes').value;
+    const oldValues = { ...student };
+    student.notes = notes;
+    student.last_updated_by = currentUser ? currentUser.name : 'System';
+    student.last_updated_at = new Date().toISOString();
+    
+    logAudit(student.id, 'Update Notes', oldValues, { ...student });
+    saveData();
+    showToast('Notes saved.');
+}
+
+// Filters
+function getFilteredStudents() {
+    let filtered = [...students];
+    
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    if (search) {
+        filtered = filtered.filter(s => s.full_name.toLowerCase().includes(search));
+    }
+    
+    const house = document.getElementById('houseFilter').value;
+    if (house) {
+        filtered = filtered.filter(s => s.house_or_group === house);
+    }
+    
+    const status = document.getElementById('statusFilter').value;
+    if (status) {
+        filtered = filtered.filter(s => s.status === status);
+    }
+    
+    const urgent = document.getElementById('urgentFilter').checked;
+    if (urgent) {
+        filtered = filtered.filter(s => {
+            if (s.status !== 'PirateShip') return false;
+            const days = getDaysRemaining(s);
+            return days !== null && days <= 3;
+        });
+    }
+    
+    return filtered;
+}
+
+function populateHouseFilter() {
+    const houseFilter = document.getElementById('houseFilter');
+    const houses = [...new Set(students.map(s => s.house_or_group))].sort();
+    houses.forEach(house => {
+        const option = document.createElement('option');
+        option.value = house;
+        option.textContent = house;
+        houseFilter.appendChild(option);
+    });
+}
+
+function updateCounts() {
+    const activeCount = students.filter(s => s.status === 'Active').length;
+    const pirateCount = students.filter(s => s.status === 'PirateShip').length;
+    document.getElementById('activeCount').textContent = activeCount;
+    document.getElementById('pirateCount').textContent = pirateCount;
+}
+
+// Auto Release
+function startAutoRelease() {
+    checkAndAutoRelease();
+    // Check every hour (for demo purposes; in production, check at midnight)
+    setInterval(checkAndAutoRelease, 60 * 60 * 1000);
+}
+
+function checkAndAutoRelease() {
     const now = new Date();
     let releasedCount = 0;
     
@@ -160,944 +1011,122 @@ function autoReleaseExpiredStudents() {
                 student.status = 'Active';
                 student.pirate_start = null;
                 student.pirate_end = null;
-                student.last_updated_by = 'System Auto-Release';
-                student.last_updated_at = new Date().toISOString();
+                student.last_updated_by = 'System';
+                student.last_updated_at = now.toISOString();
                 
-                logAction(student.id, 'Auto-Release', 'System', oldValues, { ...student });
+                logAudit(student.id, 'Auto-Release', oldValues, { ...student });
                 releasedCount++;
             }
         }
     });
     
     if (releasedCount > 0) {
-        saveToLocalStorage();
-        render();
-        console.log(`Auto-released ${releasedCount} student(s)`);
+        saveData();
+        renderBoard();
     }
 }
 
-// Schedule auto-release check at midnight
-function scheduleAutoRelease() {
-    // Check every minute for demo purposes (change to daily in production)
-    setInterval(() => {
-        autoReleaseExpiredStudents();
-    }, 60000);
-    
-    // Also check on load
-    autoReleaseExpiredStudents();
-}
-
-// Filter and sort students
-function getFilteredStudents() {
-    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-    const statusFilter = document.getElementById('statusFilter').value;
-    const urgentFilter = document.getElementById('urgentFilter').checked;
-    
-    return students.filter(student => {
-        const matchesSearch = student.full_name.toLowerCase().includes(searchTerm);
-        const matchesStatus = !statusFilter || student.status === statusFilter;
-        const matchesUrgent = !urgentFilter || (student.status === 'PirateShip' && getDaysRemaining(student.pirate_end) <= 3);
-        
-        return matchesSearch && matchesStatus && matchesUrgent;
-    });
-}
-
-// Render student card
-function renderStudentCard(student) {
-    const card = document.createElement('div');
-    card.className = `student-card ${student.status === 'PirateShip' ? 'pirate-ship' : ''} ${isAdminMode ? 'draggable' : ''}`;
-    card.dataset.studentId = student.id;
-    
-    if (isAdminMode) {
-        card.draggable = true;
-    }
-    
-    const daysLeft = student.status === 'PirateShip' ? getDaysRemaining(student.pirate_end) : null;
-    let countdownClass = 'normal';
-    if (daysLeft !== null) {
-        if (daysLeft <= 3) countdownClass = 'urgent';
-        else if (daysLeft <= 7) countdownClass = 'warning';
-    }
-    
-    const pirateStartFormatted = student.pirate_start ? new Date(student.pirate_start).toLocaleDateString() : '';
-    
-    card.innerHTML = `
-        <div class="card-header">
-            <div class="card-name">${student.full_name}</div>
-            <div class="status-chip ${student.status === 'Active' ? 'active' : 'pirate-ship'}">
-                ${student.status === 'Active' ? '⚓ Active' : '🏴‍☠️ Pirate Ship'}
-            </div>
-        </div>
-        <div class="card-body">
-            ${student.status === 'PirateShip' && daysLeft !== null ? `
-                <div class="countdown-badge ${countdownClass}">
-                    ⏳ ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left
-                </div>
-                <div class="pirate-start">Started: ${pirateStartFormatted}</div>
-            ` : ''}
-        </div>
-    `;
-    
-    // Track if we're dragging to prevent click event
-    let isDragging = false;
-    
-    card.addEventListener('click', (e) => {
-        if (!isDragging) {
-            openStudentDrawer(student.id);
-        }
-        isDragging = false;
+// Audit Logging
+function logAudit(studentId, action, oldValues, newValues) {
+    const actor = currentUser ? currentUser.name : 'System';
+    auditLog.push({
+        timestamp: new Date().toISOString(),
+        student_id: studentId,
+        action: action,
+        actor: actor,
+        old_values: oldValues,
+        new_values: newValues
     });
     
-    if (isAdminMode) {
-        card.addEventListener('dragstart', (e) => {
-            isDragging = true;
-            handleDragStart(e);
-        });
-        card.addEventListener('dragend', (e) => {
-            handleDragEnd(e);
-            // Reset isDragging after a short delay to allow click event to check it
-            setTimeout(() => {
-                isDragging = false;
-            }, 100);
-        });
-    } else {
-        // Show read-only tooltip on drag attempt
-        card.addEventListener('mousedown', (e) => {
-            if (!isAdminMode) {
-                showReadOnlyTooltip(e.pageX, e.pageY);
-            }
-        });
-    }
-    
-    return card;
-}
-
-// Render board view
-function renderBoardView() {
-    const activeColumn = document.getElementById('activeColumn');
-    const pirateColumn = document.getElementById('pirateColumn');
-    
-    activeColumn.innerHTML = '';
-    pirateColumn.innerHTML = '';
-    
-    const filteredStudents = getFilteredStudents();
-    
-    // Sort Active by name, Pirate Ship by days remaining
-    const activeStudents = filteredStudents
-        .filter(s => s.status === 'Active')
-        .sort((a, b) => a.full_name.localeCompare(b.full_name));
-    
-    const pirateStudents = filteredStudents
-        .filter(s => s.status === 'PirateShip')
-        .sort((a, b) => {
-            const daysA = getDaysRemaining(a.pirate_end) || 999;
-            const daysB = getDaysRemaining(b.pirate_end) || 999;
-            return daysA - daysB;
-        });
-    
-    activeStudents.forEach(student => {
-        activeColumn.appendChild(renderStudentCard(student));
-    });
-    
-    pirateStudents.forEach(student => {
-        pirateColumn.appendChild(renderStudentCard(student));
-    });
-    
-    // Update counts
-    document.getElementById('activeCount').textContent = activeStudents.length;
-    document.getElementById('pirateCount').textContent = pirateStudents.length;
-}
-
-// Render table view
-function renderTableView() {
-    const tbody = document.getElementById('tableBody');
-    tbody.innerHTML = '';
-    
-    const filteredStudents = getFilteredStudents();
-    
-    filteredStudents.forEach(student => {
-        const row = document.createElement('tr');
-        const daysLeft = student.status === 'PirateShip' ? getDaysRemaining(student.pirate_end) : null;
-        
-        row.innerHTML = `
-            <td><input type="checkbox" class="student-checkbox" data-student-id="${student.id}"></td>
-            <td>${student.full_name}</td>
-            <td>
-                <span class="status-chip ${student.status === 'Active' ? 'active' : 'pirate-ship'}">
-                    ${student.status === 'Active' ? 'Active' : 'Pirate Ship'}
-                </span>
-            </td>
-            <td>${student.pirate_start ? new Date(student.pirate_start).toLocaleDateString() : '--'}</td>
-            <td>${student.pirate_end ? new Date(student.pirate_end).toLocaleDateString() : '--'}</td>
-            <td>${daysLeft !== null ? `${daysLeft} days` : '--'}</td>
-            <td class="table-notes">${student.notes || '--'}</td>
-            <td>
-                <button class="btn btn-primary btn-small" onclick="openStudentDrawer('${student.id}')">Details</button>
-            </td>
-        `;
-        
-        tbody.appendChild(row);
-    });
-    
-    // Update bulk action buttons
-    updateBulkActionButtons();
-}
-
-// Render
-function render() {
-    updateLastRefresh();
-    
-    const boardView = document.getElementById('boardView');
-    const tableView = document.getElementById('tableView');
-    
-    if (boardView.style.display !== 'none') {
-        renderBoardView();
-    }
-    
-    if (tableView.style.display !== 'none') {
-        renderTableView();
+    // Keep only last 1000 entries
+    if (auditLog.length > 1000) {
+        auditLog = auditLog.slice(-1000);
     }
 }
 
-function updateLastRefresh() {
-    const now = new Date();
-    document.getElementById('lastRefresh').textContent = now.toLocaleTimeString();
-}
-
-// Drag and Drop handlers
-function handleDragStart(e) {
-    console.log('🎯 Drag started, isAdminMode:', isAdminMode, 'studentId:', e.target.dataset.studentId);
-    if (!isAdminMode) {
-        e.preventDefault();
-        console.log('❌ Drag prevented - not in admin mode');
-        return;
+// Undo
+function showToast(message) {
+    const toast = document.getElementById('toast');
+    document.getElementById('toastMessage').textContent = message;
+    toast.classList.add('active');
+    
+    // Store last action for undo
+    if (auditLog.length > 0) {
+        lastUndoAction = auditLog[auditLog.length - 1];
     }
     
-    e.target.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/html', e.target.dataset.studentId);
-    console.log('✅ Drag data set');
-}
-
-function handleDragEnd(e) {
-    e.target.classList.remove('dragging');
-}
-
-function handleDragOver(e) {
-    if (!isAdminMode) return;
-    
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    
-    const column = e.target.closest('.column-content');
-    if (column) {
-        column.classList.add('drag-over');
-    }
-}
-
-function handleDragLeave(e) {
-    const column = e.target.closest('.column-content');
-    if (column) {
-        column.classList.remove('drag-over');
-    }
-}
-
-function handleDrop(e) {
-    console.log('📍 Drop event triggered');
-    e.preventDefault();
-    
-    const column = e.target.closest('.column-content');
-    if (column) {
-        column.classList.remove('drag-over');
-    }
-    
-    if (!isAdminMode) {
-        console.log('❌ Drop prevented - not in admin mode');
-        return;
-    }
-    
-    const studentId = e.dataTransfer.getData('text/html');
-    const targetStatus = column ? column.dataset.status : null;
-    
-    console.log('📦 Drop data - studentId:', studentId, 'targetStatus:', targetStatus);
-    
-    if (!studentId || !targetStatus) {
-        console.log('❌ Missing data for drop');
-        return;
-    }
-    
-    const student = students.find(s => s.id === studentId);
-    if (!student) {
-        console.log('❌ Student not found:', studentId);
-        return;
-    }
-    
-    if (student.status === targetStatus) {
-        console.log('ℹ️ Student already in target status');
-        return;
-    }
-    
-    console.log('✅ Opening modal for:', student.full_name, 'to', targetStatus);
-    
-    if (targetStatus === 'PirateShip') {
-        openPirateModal(student);
-    } else if (targetStatus === 'Active') {
-        openReleaseModal(student);
-    }
-}
-
-// Modals
-function openPirateModal(student) {
-    currentStudent = student;
-    const modal = document.getElementById('pirateModal');
-    const message = document.getElementById('pirateModalMessage');
-    const startInput = document.getElementById('pirateStartDate');
-    const endInput = document.getElementById('pirateEndDate');
-    const notesInput = document.getElementById('pirateNotes');
-    
-    message.textContent = `Set sail: ${student.full_name} enters Pirate Ship`;
-    
-    const now = new Date();
-    startInput.value = formatDateTimeLocal(now);
-    endInput.value = formatDateTimeLocal(new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000));
-    notesInput.value = '';
-    
-    modal.classList.remove('hidden');
-    
-    // Update end date when start date changes
-    startInput.addEventListener('input', () => {
-        const start = new Date(startInput.value);
-        const end = new Date(start.getTime() + 14 * 24 * 60 * 60 * 1000);
-        endInput.value = formatDateTimeLocal(end);
-    });
-}
-
-function openReleaseModal(student) {
-    currentStudent = student;
-    const modal = document.getElementById('releaseModal');
-    const message = document.getElementById('releaseModalMessage');
-    
-    message.textContent = `Anchors up: ${student.full_name} returns to Active.`;
-    
-    modal.classList.remove('hidden');
-}
-
-function openCustomEndModal() {
-    const modal = document.getElementById('customEndModal');
-    const input = document.getElementById('customEndDate');
-    
-    if (currentStudent && currentStudent.pirate_end) {
-        input.value = formatDateTimeLocal(new Date(currentStudent.pirate_end));
-    }
-    
-    modal.classList.remove('hidden');
-}
-
-function closePirateModal() {
-    document.getElementById('pirateModal').classList.add('hidden');
-    currentStudent = null;
-}
-
-function closeReleaseModal() {
-    document.getElementById('releaseModal').classList.add('hidden');
-    currentStudent = null;
-}
-
-function closeCustomEndModal() {
-    document.getElementById('customEndModal').classList.add('hidden');
-}
-
-// Move student to Pirate Ship
-function confirmMoveToPirateShip() {
-    if (!currentStudent) return;
-    
-    const startInput = document.getElementById('pirateStartDate').value;
-    const endInput = document.getElementById('pirateEndDate').value;
-    const notes = document.getElementById('pirateNotes').value;
-    
-    const oldValues = { ...currentStudent };
-    
-    currentStudent.status = 'PirateShip';
-    currentStudent.pirate_start = new Date(startInput).toISOString();
-    currentStudent.pirate_end = new Date(endInput).toISOString();
-    if (notes) currentStudent.notes = notes;
-    currentStudent.last_updated_by = 'Admin';
-    currentStudent.last_updated_at = new Date().toISOString();
-    
-    const endDate = new Date(endInput);
-    const formattedEnd = `${endDate.getMonth() + 1}/${endDate.getDate()}`;
-    
-    logAction(currentStudent.id, 'Moved to Pirate Ship', 'Admin', oldValues, { ...currentStudent });
-    
-    // Store undo action
-    undoAction = {
-        type: 'moveToPirate',
-        student: currentStudent,
-        oldValues: oldValues
-    };
-    
-    showUndoToast(`Set sail: ${currentStudent.full_name} enters Pirate Ship until ${formattedEnd}.`);
-    
-    saveToLocalStorage();
-    render();
-    closePirateModal();
-}
-
-// Release student from Pirate Ship
-function confirmReleaseFromPirateShip() {
-    if (!currentStudent) return;
-    
-    const oldValues = { ...currentStudent };
-    
-    currentStudent.status = 'Active';
-    currentStudent.pirate_start = null;
-    currentStudent.pirate_end = null;
-    currentStudent.last_updated_by = 'Admin';
-    currentStudent.last_updated_at = new Date().toISOString();
-    
-    logAction(currentStudent.id, 'Released from Pirate Ship', 'Admin', oldValues, { ...currentStudent });
-    
-    // Store undo action
-    undoAction = {
-        type: 'releaseFromPirate',
-        student: currentStudent,
-        oldValues: oldValues
-    };
-    
-    showUndoToast(`Anchors up: ${currentStudent.full_name} returns to Active.`);
-    
-    saveToLocalStorage();
-    render();
-    closeReleaseModal();
-}
-
-// Undo action
-function undoLastAction() {
-    if (!undoAction) return;
-    
-    if (undoAction.type === 'moveToPirate' || undoAction.type === 'releaseFromPirate') {
-        Object.assign(undoAction.student, undoAction.oldValues);
-        logAction(undoAction.student.id, 'Undo Action', 'Admin', null, { ...undoAction.student });
-    }
-    
-    saveToLocalStorage();
-    render();
-    hideUndoToast();
-}
-
-// Show/hide undo toast
-function showUndoToast(message) {
-    const toast = document.getElementById('undoToast');
-    const messageEl = document.getElementById('undoMessage');
-    
-    messageEl.textContent = message;
-    toast.classList.remove('hidden');
-    
-    // Clear existing timer
-    if (undoTimer) clearTimeout(undoTimer);
-    
-    // Auto-hide after 10 seconds
-    undoTimer = setTimeout(() => {
-        hideUndoToast();
+    setTimeout(() => {
+        toast.classList.remove('active');
+        lastUndoAction = null;
     }, 10000);
 }
 
-function hideUndoToast() {
-    document.getElementById('undoToast').classList.add('hidden');
-    undoAction = null;
-    if (undoTimer) {
-        clearTimeout(undoTimer);
-        undoTimer = null;
-    }
-}
-
-// Student drawer
-function openStudentDrawer(studentId) {
-    const student = students.find(s => s.id === studentId);
+function undoLastAction() {
+    if (!lastUndoAction) return;
+    
+    const student = students.find(s => s.id === lastUndoAction.student_id);
     if (!student) return;
     
-    currentStudent = student;
+    // Restore old values
+    Object.assign(student, lastUndoAction.old_values);
+    student.last_updated_by = currentUser ? currentUser.name : 'System';
+    student.last_updated_at = new Date().toISOString();
     
-    const drawer = document.getElementById('detailDrawer');
-    document.getElementById('drawerStudentName').textContent = student.full_name;
-    document.getElementById('drawerStatus').textContent = student.status === 'Active' ? '⚓ Active' : '🏴‍☠️ Pirate Ship';
-    document.getElementById('drawerPirateStart').textContent = student.pirate_start ? new Date(student.pirate_start).toLocaleString() : '--';
-    document.getElementById('drawerPirateEnd').textContent = student.pirate_end ? new Date(student.pirate_end).toLocaleString() : '--';
-    
-    const daysLeft = student.status === 'PirateShip' ? getDaysRemaining(student.pirate_end) : null;
-    document.getElementById('drawerDaysLeft').textContent = daysLeft !== null ? `${daysLeft} days` : '--';
-    
-    document.getElementById('drawerNotes').value = student.notes || '';
-    
-    // Show/hide quick actions based on status
-    document.getElementById('quickExtend7').style.display = student.status === 'PirateShip' ? 'block' : 'none';
-    document.getElementById('quickRelease').style.display = student.status === 'PirateShip' ? 'block' : 'none';
-    document.getElementById('quickCustomEnd').style.display = student.status === 'PirateShip' ? 'block' : 'none';
-    
-    // Render history
-    const historyList = document.getElementById('historyList');
-    const studentHistory = auditLog
-        .filter(log => log.student_id === student.id)
-        .slice(-5)
-        .reverse();
-    
-    if (studentHistory.length > 0) {
-        historyList.innerHTML = studentHistory.map(log => `
-            <div class="history-item">
-                <div><strong>${log.action}</strong> by ${log.actor}</div>
-                <div class="timestamp">${new Date(log.timestamp).toLocaleString()}</div>
-            </div>
-        `).join('');
-    } else {
-        historyList.innerHTML = '<p style="color: #6b7280;">No history available</p>';
+    // Remove the undone action from audit log
+    const index = auditLog.findIndex(log => log === lastUndoAction);
+    if (index !== -1) {
+        auditLog.splice(index, 1);
     }
     
-    drawer.classList.remove('hidden');
-}
-
-function closeStudentDrawer() {
-    document.getElementById('detailDrawer').classList.add('hidden');
-    currentStudent = null;
-}
-
-function saveStudentNotes() {
-    if (!currentStudent) return;
+    // Log undo action
+    logAudit(student.id, 'Undo', lastUndoAction.new_values, { ...student });
     
-    const notes = document.getElementById('drawerNotes').value;
-    const oldValues = { notes: currentStudent.notes };
-    
-    currentStudent.notes = notes;
-    currentStudent.last_updated_by = 'Admin';
-    currentStudent.last_updated_at = new Date().toISOString();
-    
-    logAction(currentStudent.id, 'Updated Notes', 'Admin', oldValues, { notes });
-    saveToLocalStorage();
-    render();
-    
-    alert('Notes saved successfully!');
-}
-
-function quickExtend7Days() {
-    if (!currentStudent || currentStudent.status !== 'PirateShip') return;
-    
-    const oldValues = { pirate_end: currentStudent.pirate_end };
-    const newEnd = new Date(new Date(currentStudent.pirate_end).getTime() + 7 * 24 * 60 * 60 * 1000);
-    currentStudent.pirate_end = newEnd.toISOString();
-    currentStudent.last_updated_by = 'Admin';
-    currentStudent.last_updated_at = new Date().toISOString();
-    
-    logAction(currentStudent.id, 'Extended +7 days', 'Admin', oldValues, { pirate_end: currentStudent.pirate_end });
-    saveToLocalStorage();
-    render();
-    openStudentDrawer(currentStudent.id);
-    
-    alert('Extended by 7 days!');
-}
-
-function quickRelease() {
-    if (!currentStudent || currentStudent.status !== 'PirateShip') return;
-    
-    openReleaseModal(currentStudent);
-    closeStudentDrawer();
-}
-
-function confirmCustomEndDate() {
-    if (!currentStudent) return;
-    
-    const newEndInput = document.getElementById('customEndDate').value;
-    const oldValues = { pirate_end: currentStudent.pirate_end };
-    
-    currentStudent.pirate_end = new Date(newEndInput).toISOString();
-    currentStudent.last_updated_by = 'Admin';
-    currentStudent.last_updated_at = new Date().toISOString();
-    
-    logAction(currentStudent.id, 'Custom End Date Set', 'Admin', oldValues, { pirate_end: currentStudent.pirate_end });
-    saveToLocalStorage();
-    render();
-    closeCustomEndModal();
-    openStudentDrawer(currentStudent.id);
-    
-    alert('Custom end date set!');
-}
-
-// Read-only tooltip
-function showReadOnlyTooltip(x, y) {
-    const tooltip = document.getElementById('readonlyTooltip');
-    tooltip.style.left = `${x + 10}px`;
-    tooltip.style.top = `${y + 10}px`;
-    tooltip.classList.remove('hidden');
-    
-    setTimeout(() => {
-        tooltip.classList.add('hidden');
-    }, 2000);
-}
-
-// Bulk actions
-function updateBulkActionButtons() {
-    const checkboxes = document.querySelectorAll('.student-checkbox:checked');
-    const count = checkboxes.length;
-    
-    document.getElementById('bulkPirateShip').disabled = count === 0 || !isAdminMode;
-    document.getElementById('bulkRelease').disabled = count === 0 || !isAdminMode;
-    document.getElementById('bulkExtend7').disabled = count === 0 || !isAdminMode;
-    document.getElementById('bulkExtend14').disabled = count === 0 || !isAdminMode;
-}
-
-function bulkMoveToPirateShip() {
-    if (!isAdminMode) return;
-    
-    const checkboxes = document.querySelectorAll('.student-checkbox:checked');
-    const studentIds = Array.from(checkboxes).map(cb => cb.dataset.studentId);
-    
-    if (studentIds.length === 0) return;
-    
-    const startDate = new Date();
-    const endDate = new Date(startDate.getTime() + 14 * 24 * 60 * 60 * 1000);
-    
-    if (!confirm(`Move ${studentIds.length} student(s) to Pirate Ship?`)) return;
-    
-    studentIds.forEach(id => {
-        const student = students.find(s => s.id === id);
-        if (student && student.status === 'Active') {
-            const oldValues = { ...student };
-            student.status = 'PirateShip';
-            student.pirate_start = startDate.toISOString();
-            student.pirate_end = endDate.toISOString();
-            student.last_updated_by = 'Admin';
-            student.last_updated_at = new Date().toISOString();
-            logAction(student.id, 'Bulk Move to Pirate Ship', 'Admin', oldValues, { ...student });
-        }
-    });
-    
-    saveToLocalStorage();
-    render();
-    alert(`${studentIds.length} student(s) moved to Pirate Ship!`);
-}
-
-function bulkRelease() {
-    if (!isAdminMode) return;
-    
-    const checkboxes = document.querySelectorAll('.student-checkbox:checked');
-    const studentIds = Array.from(checkboxes).map(cb => cb.dataset.studentId);
-    
-    if (studentIds.length === 0) return;
-    
-    if (!confirm(`Release ${studentIds.length} student(s) from Pirate Ship?`)) return;
-    
-    studentIds.forEach(id => {
-        const student = students.find(s => s.id === id);
-        if (student && student.status === 'PirateShip') {
-            const oldValues = { ...student };
-            student.status = 'Active';
-            student.pirate_start = null;
-            student.pirate_end = null;
-            student.last_updated_by = 'Admin';
-            student.last_updated_at = new Date().toISOString();
-            logAction(student.id, 'Bulk Release', 'Admin', oldValues, { ...student });
-        }
-    });
-    
-    saveToLocalStorage();
-    render();
-    alert(`${studentIds.length} student(s) released!`);
-}
-
-function bulkExtend(days) {
-    if (!isAdminMode) return;
-    
-    const checkboxes = document.querySelectorAll('.student-checkbox:checked');
-    const studentIds = Array.from(checkboxes).map(cb => cb.dataset.studentId);
-    
-    if (studentIds.length === 0) return;
-    
-    if (!confirm(`Extend ${studentIds.length} student(s) by ${days} days?`)) return;
-    
-    studentIds.forEach(id => {
-        const student = students.find(s => s.id === id);
-        if (student && student.status === 'PirateShip' && student.pirate_end) {
-            const oldValues = { pirate_end: student.pirate_end };
-            const newEnd = new Date(new Date(student.pirate_end).getTime() + days * 24 * 60 * 60 * 1000);
-            student.pirate_end = newEnd.toISOString();
-            student.last_updated_by = 'Admin';
-            student.last_updated_at = new Date().toISOString();
-            logAction(student.id, `Bulk Extend +${days} days`, 'Admin', oldValues, { pirate_end: student.pirate_end });
-        }
-    });
-    
-    saveToLocalStorage();
-    render();
-    alert(`${studentIds.length} student(s) extended by ${days} days!`);
-}
-
-// Add new student
-function openAddStudentModal() {
-    console.log('📝 Open Add Student Modal clicked, isAdminMode:', isAdminMode);
-    if (!isAdminMode) {
-        alert('Please enable Admin Mode to add students.');
-        return;
-    }
-    const modal = document.getElementById('addStudentModal');
-    document.getElementById('newStudentName').value = '';
-    modal.classList.remove('hidden');
-    console.log('✅ Modal opened');
-}
-
-function closeAddStudentModal() {
-    document.getElementById('addStudentModal').classList.add('hidden');
-}
-
-function confirmAddStudent() {
-    console.log('💾 Confirm Add Student clicked');
-    const name = document.getElementById('newStudentName').value.trim();
-    
-    if (!name) {
-        alert('Please enter a student name.');
-        return;
-    }
-    console.log('Adding student:', name);
-    
-    const newStudent = {
-        id: `student-${Date.now()}`,
-        full_name: name,
-        status: 'Active',
-        pirate_start: null,
-        pirate_end: null,
-        notes: '',
-        last_updated_by: 'Admin',
-        last_updated_at: new Date().toISOString()
-    };
-    
-    students.push(newStudent);
-    logAction(newStudent.id, 'Student Added', 'Admin', null, newStudent);
-    saveToLocalStorage();
-    closeAddStudentModal();
-    render();
-    
-    // Show confirmation message briefly
-    showUndoToast(`${name} has been added successfully!`);
-    setTimeout(() => {
-        hideUndoToast();
-    }, 3000);
-}
-
-// Delete student
-function deleteStudent() {
-    if (!currentStudent) return;
-    
-    if (!isAdminMode) {
-        alert('Please enable Admin Mode to delete students.');
-        return;
-    }
-    
-    if (!confirm(`Are you sure you want to delete ${currentStudent.full_name}? This action cannot be undone.`)) {
-        return;
-    }
-    
-    const studentName = currentStudent.full_name;
-    const studentId = currentStudent.id;
-    
-    logAction(studentId, 'Student Deleted', 'Admin', { ...currentStudent }, null);
-    
-    students = students.filter(s => s.id !== studentId);
-    saveToLocalStorage();
-    closeStudentDrawer();
-    render();
-    
-    // Show confirmation
-    showUndoToast(`${studentName} has been deleted.`);
-    setTimeout(() => {
-        hideUndoToast();
-    }, 3000);
+    saveData();
+    renderBoard();
+    document.getElementById('toast').classList.remove('active');
+    lastUndoAction = null;
 }
 
 // Export CSV
 function exportCSV() {
-    const filteredStudents = getFilteredStudents();
-    
-    let csv = 'Name,Status,Pirate Start,Pirate End,Days Left,Notes\n';
-    
-    filteredStudents.forEach(student => {
-        const daysLeft = student.status === 'PirateShip' ? getDaysRemaining(student.pirate_end) : '';
-        const pirateStart = student.pirate_start ? new Date(student.pirate_start).toLocaleDateString() : '';
-        const pirateEnd = student.pirate_end ? new Date(student.pirate_end).toLocaleDateString() : '';
-        const notes = (student.notes || '').replace(/"/g, '""');
+    const headers = ['Name', 'House', 'Status', 'Pirate Start', 'Pirate End', 'Days Left', 'Notes'];
+    const rows = students.map(student => {
+        const daysLeft = student.status === 'PirateShip' ? getDaysRemaining(student) : '';
+        const startDate = student.pirate_start ? new Date(student.pirate_start).toLocaleDateString() : '';
+        const endDate = student.pirate_end ? new Date(student.pirate_end).toLocaleDateString() : '';
         
-        csv += `"${student.full_name}","${student.status}","${pirateStart}","${pirateEnd}","${daysLeft}","${notes}"\n`;
+        return [
+            student.full_name,
+            student.house_or_group,
+            student.status,
+            startDate,
+            endDate,
+            daysLeft !== null ? daysLeft : '',
+            student.notes || ''
+        ];
     });
     
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
+    const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `alpha-fleet-board-${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    window.URL.revokeObjectURL(url);
 }
 
-// Utility functions
-function formatDateTimeLocal(date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
+// Last Refresh
+function updateLastRefresh() {
+    const now = new Date();
+    document.getElementById('lastRefresh').textContent = `Last refresh: ${now.toLocaleTimeString()}`;
+    setInterval(() => {
+        const now = new Date();
+        document.getElementById('lastRefresh').textContent = `Last refresh: ${now.toLocaleTimeString()}`;
+    }, 60000); // Update every minute
 }
-
-// Event listeners
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 App initializing...');
-    
-    try {
-        // Load data
-        await loadFromLocalStorage();
-        console.log('✅ Data loaded, students:', students.length);
-    } catch (error) {
-        console.error('❌ Error loading data:', error);
-    }
-    
-    // Set admin mode active on load
-    const adminToggle = document.getElementById('adminToggle');
-    if (adminToggle) {
-        adminToggle.classList.add('active');
-        adminToggle.textContent = '🔓 Admin Mode';
-        console.log('✅ Admin mode enabled by default');
-        
-        // Admin toggle
-        adminToggle.addEventListener('click', (e) => {
-            isAdminMode = !isAdminMode;
-            e.target.classList.toggle('active');
-            e.target.textContent = isAdminMode ? '🔓 Admin Mode' : 'Admin Mode';
-            render();
-        });
-    } else {
-        console.error('❌ Admin toggle button not found!');
-    }
-    
-    // View tabs
-    document.getElementById('boardViewBtn').addEventListener('click', () => {
-        document.getElementById('boardView').style.display = 'block';
-        document.getElementById('tableView').style.display = 'none';
-        document.getElementById('boardViewBtn').classList.add('active');
-        document.getElementById('tableViewBtn').classList.remove('active');
-        render();
-    });
-    
-    document.getElementById('tableViewBtn').addEventListener('click', () => {
-        document.getElementById('boardView').style.display = 'none';
-        document.getElementById('tableView').style.display = 'block';
-        document.getElementById('boardViewBtn').classList.remove('active');
-        document.getElementById('tableViewBtn').classList.add('active');
-        render();
-    });
-    
-    // Filters
-    document.getElementById('searchInput').addEventListener('input', render);
-    document.getElementById('statusFilter').addEventListener('change', render);
-    document.getElementById('urgentFilter').addEventListener('change', render);
-    
-    // Add student
-    const addStudentBtn = document.getElementById('addStudentBtn');
-    if (addStudentBtn) {
-        addStudentBtn.addEventListener('click', openAddStudentModal);
-        console.log('✅ Add Student button listener attached');
-    } else {
-        console.error('❌ Add Student button not found!');
-    }
-    
-    const confirmAddBtn = document.getElementById('confirmAddStudent');
-    if (confirmAddBtn) {
-        confirmAddBtn.addEventListener('click', confirmAddStudent);
-    }
-    
-    const cancelAddBtn = document.getElementById('cancelAddStudent');
-    if (cancelAddBtn) {
-        cancelAddBtn.addEventListener('click', closeAddStudentModal);
-    }
-    
-    const addModalOverlay = document.querySelector('#addStudentModal .modal-overlay');
-    if (addModalOverlay) {
-        addModalOverlay.addEventListener('click', closeAddStudentModal);
-    }
-    
-    // Allow Enter key to submit add student form
-    const newStudentNameInput = document.getElementById('newStudentName');
-    if (newStudentNameInput) {
-        newStudentNameInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                confirmAddStudent();
-            }
-        });
-    }
-    
-    // Export CSV
-    document.getElementById('exportCsv').addEventListener('click', exportCSV);
-    
-    // Drag and drop on columns
-    const columns = document.querySelectorAll('.column-content');
-    columns.forEach(column => {
-        column.addEventListener('dragover', handleDragOver);
-        column.addEventListener('dragleave', handleDragLeave);
-        column.addEventListener('drop', handleDrop);
-    });
-    
-    // Pirate modal
-    document.getElementById('confirmPirate').addEventListener('click', confirmMoveToPirateShip);
-    document.getElementById('cancelPirate').addEventListener('click', closePirateModal);
-    document.querySelector('#pirateModal .modal-overlay').addEventListener('click', closePirateModal);
-    
-    // Release modal
-    document.getElementById('confirmRelease').addEventListener('click', confirmReleaseFromPirateShip);
-    document.getElementById('cancelRelease').addEventListener('click', closeReleaseModal);
-    document.querySelector('#releaseModal .modal-overlay').addEventListener('click', closeReleaseModal);
-    
-    // Custom end modal
-    document.getElementById('confirmCustomEnd').addEventListener('click', confirmCustomEndDate);
-    document.getElementById('cancelCustomEnd').addEventListener('click', closeCustomEndModal);
-    document.querySelector('#customEndModal .modal-overlay').addEventListener('click', closeCustomEndModal);
-    
-    // Undo toast
-    document.getElementById('undoBtn').addEventListener('click', undoLastAction);
-    
-    // Student drawer
-    document.getElementById('closeDrawer').addEventListener('click', closeStudentDrawer);
-    document.querySelector('#detailDrawer .drawer-overlay').addEventListener('click', closeStudentDrawer);
-    document.getElementById('saveNotes').addEventListener('click', saveStudentNotes);
-    document.getElementById('quickExtend7').addEventListener('click', quickExtend7Days);
-    document.getElementById('quickRelease').addEventListener('click', quickRelease);
-    document.getElementById('quickCustomEnd').addEventListener('click', () => {
-        openCustomEndModal();
-    });
-    document.getElementById('deleteStudent').addEventListener('click', deleteStudent);
-    
-    // Bulk actions
-    document.getElementById('selectAll').addEventListener('change', (e) => {
-        const checkboxes = document.querySelectorAll('.student-checkbox');
-        checkboxes.forEach(cb => cb.checked = e.target.checked);
-        updateBulkActionButtons();
-    });
-    
-    document.getElementById('bulkPirateShip').addEventListener('click', bulkMoveToPirateShip);
-    document.getElementById('bulkRelease').addEventListener('click', bulkRelease);
-    document.getElementById('bulkExtend7').addEventListener('click', () => bulkExtend(7));
-    document.getElementById('bulkExtend14').addEventListener('click', () => bulkExtend(14));
-    
-    // Delegate checkbox change events
-    document.addEventListener('change', (e) => {
-        if (e.target.classList.contains('student-checkbox')) {
-            updateBulkActionButtons();
-        }
-    });
-    
-    // Initial render
-    console.log('🎨 Starting initial render...');
-    render();
-    
-    // Schedule auto-release
-    scheduleAutoRelease();
-    
-    console.log('✅ App fully initialized and ready!');
-});
 

@@ -4,5 +4,7 @@ node_modules/
 .vercel
 .env
 .env.local
+.env.production
 server.log
+data.json
 

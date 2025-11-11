@@ -1,11 +1,11 @@
-// Vercel serverless function for data management
-// Uses Vercel KV (Redis) for persistent storage
+// Vercel serverless function for data retrieval
+// Uses Vercel KV (Redis) for persistent cloud storage
 
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
@@ -14,7 +14,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
-      // Try to use Vercel KV if available
+      // Check if KV is configured
       if (process.env.KV_REST_API_URL) {
         const { kv } = await import('@vercel/kv');
         const data = await kv.get('alpha_fleet_data');
@@ -24,7 +24,7 @@ export default async function handler(req, res) {
         }
       }
       
-      // Return empty data if no KV or no data stored
+      // Return empty data structure if nothing found
       return res.status(200).json({
         students: [],
         auditLog: [],
@@ -37,27 +37,6 @@ export default async function handler(req, res) {
         auditLog: [],
         lastUpdated: null
       });
-    }
-  }
-
-  if (req.method === 'POST') {
-    try {
-      const data = req.body;
-      
-      // Try to use Vercel KV if available
-      if (process.env.KV_REST_API_URL) {
-        const { kv } = await import('@vercel/kv');
-        await kv.set('alpha_fleet_data', data);
-      }
-      
-      return res.status(200).json({ 
-        success: true, 
-        message: 'Data saved',
-        kvEnabled: !!process.env.KV_REST_API_URL
-      });
-    } catch (error) {
-      console.error('Error saving data:', error);
-      return res.status(500).json({ error: 'Failed to save data' });
     }
   }
 

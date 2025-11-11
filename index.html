@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alpha Fleet Board - Pirate Ship</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>🏴‍☠️ Alpha Afterschool Fleet Board</h1>
+                <div class="header-actions">
+                    <span class="last-refresh">Last refresh: <span id="lastRefresh">--</span></span>
+                    <button id="adminToggle" class="btn btn-admin">Admin Mode</button>
+                    <button id="exportCsv" class="btn btn-secondary">Export CSV</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Controls -->
+        <div class="controls">
+            <div class="search-filter">
+                <input type="text" id="searchInput" placeholder="🔍 Search by name..." class="search-box">
+                <select id="statusFilter" class="filter-select">
+                    <option value="">All Status</option>
+                    <option value="Active">Active</option>
+                    <option value="PirateShip">Pirate Ship</option>
+                </select>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="urgentFilter">
+                    ≤3 days remaining
+                </label>
+                <button id="addStudentBtn" class="btn btn-primary">+ Add Student</button>
+            </div>
+            <div class="view-tabs">
+                <button id="boardViewBtn" class="tab-btn active">Board View</button>
+                <button id="tableViewBtn" class="tab-btn">Table View</button>
+            </div>
+        </div>
+
+        <!-- Board View -->
+        <div id="boardView" class="board-view">
+            <div class="board-columns">
+                <div class="board-column" data-status="Active">
+                    <div class="column-header">
+                        <h2>⚓ Active</h2>
+                        <span class="column-count" id="activeCount">0</span>
+                    </div>
+                    <div class="column-content" id="activeColumn" data-status="Active">
+                        <!-- Student cards will be rendered here -->
+                    </div>
+                </div>
+                <div class="board-column" data-status="PirateShip">
+                    <div class="column-header">
+                        <h2>🏴‍☠️ Pirate Ship</h2>
+                        <span class="column-count" id="pirateCount">0</span>
+                    </div>
+                    <div class="column-content" id="pirateColumn" data-status="PirateShip">
+                        <!-- Student cards will be rendered here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Table View -->
+        <div id="tableView" class="table-view" style="display: none;">
+            <div class="table-actions">
+                <button id="bulkPirateShip" class="btn btn-danger" disabled>Move to Pirate Ship</button>
+                <button id="bulkRelease" class="btn btn-success" disabled>Release to Active</button>
+                <button id="bulkExtend7" class="btn btn-secondary" disabled>Extend +7 days</button>
+                <button id="bulkExtend14" class="btn btn-secondary" disabled>Extend +14 days</button>
+            </div>
+            <div class="table-container">
+                <table id="studentsTable">
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="selectAll"></th>
+                            <th>Name</th>
+                            <th>Status</th>
+                            <th>Pirate Start</th>
+                            <th>Pirate End</th>
+                            <th>Days Left</th>
+                            <th>Notes</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- Rows will be rendered here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Undo Toast -->
+        <div id="undoToast" class="undo-toast hidden">
+            <span id="undoMessage"></span>
+            <button id="undoBtn" class="btn btn-undo">Undo</button>
+        </div>
+
+        <!-- Student Detail Drawer -->
+        <div id="detailDrawer" class="drawer hidden">
+            <div class="drawer-overlay"></div>
+            <div class="drawer-content">
+                <div class="drawer-header">
+                    <h3 id="drawerStudentName"></h3>
+                    <button id="closeDrawer" class="btn-close">✕</button>
+                </div>
+                <div class="drawer-body">
+                    <div class="student-info">
+                        <p><strong>Status:</strong> <span id="drawerStatus"></span></p>
+                        <p><strong>Pirate Start:</strong> <span id="drawerPirateStart"></span></p>
+                        <p><strong>Pirate End:</strong> <span id="drawerPirateEnd"></span></p>
+                        <p><strong>Days Remaining:</strong> <span id="drawerDaysLeft"></span></p>
+                    </div>
+                    <div class="drawer-notes">
+                        <label><strong>Notes:</strong></label>
+                        <textarea id="drawerNotes" rows="3"></textarea>
+                        <button id="saveNotes" class="btn btn-primary">Save Notes</button>
+                    </div>
+                    <div class="drawer-actions">
+                        <h4>Quick Actions</h4>
+                        <button id="quickExtend7" class="btn btn-secondary">Extend +7 days</button>
+                        <button id="quickRelease" class="btn btn-success">Release Now</button>
+                        <button id="quickCustomEnd" class="btn btn-secondary">Set Custom End Date</button>
+                        <button id="deleteStudent" class="btn btn-danger">Delete Student</button>
+                    </div>
+                    <div class="drawer-history">
+                        <h4>Recent History</h4>
+                        <div id="historyList"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal for Moving to Pirate Ship -->
+        <div id="pirateModal" class="modal hidden">
+            <div class="modal-overlay"></div>
+            <div class="modal-content">
+                <h3>⚓ Set Sail to Pirate Ship</h3>
+                <p id="pirateModalMessage"></p>
+                <div class="form-group">
+                    <label>Start Date:</label>
+                    <input type="datetime-local" id="pirateStartDate" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>End Date (14 days from start):</label>
+                    <input type="datetime-local" id="pirateEndDate" class="form-control" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Notes (optional):</label>
+                    <textarea id="pirateNotes" class="form-control" rows="3"></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button id="confirmPirate" class="btn btn-danger">Confirm</button>
+                    <button id="cancelPirate" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal for Releasing from Pirate Ship -->
+        <div id="releaseModal" class="modal hidden">
+            <div class="modal-overlay"></div>
+            <div class="modal-content">
+                <h3>🎉 Release from Pirate Ship</h3>
+                <p id="releaseModalMessage"></p>
+                <div class="modal-actions">
+                    <button id="confirmRelease" class="btn btn-success">Confirm Release</button>
+                    <button id="cancelRelease" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal for Custom End Date -->
+        <div id="customEndModal" class="modal hidden">
+            <div class="modal-overlay"></div>
+            <div class="modal-content">
+                <h3>Set Custom End Date</h3>
+                <div class="form-group">
+                    <label>New End Date:</label>
+                    <input type="datetime-local" id="customEndDate" class="form-control">
+                </div>
+                <div class="modal-actions">
+                    <button id="confirmCustomEnd" class="btn btn-primary">Confirm</button>
+                    <button id="cancelCustomEnd" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Student Modal -->
+        <div id="addStudentModal" class="modal hidden">
+            <div class="modal-overlay"></div>
+            <div class="modal-content">
+                <h3>Add New Student</h3>
+                <div class="form-group">
+                    <label>Full Name:</label>
+                    <input type="text" id="newStudentName" class="form-control" placeholder="Enter student name">
+                </div>
+                <div class="modal-actions">
+                    <button id="confirmAddStudent" class="btn btn-primary">Add Student</button>
+                    <button id="cancelAddStudent" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Read-Only Tooltip -->
+        <div id="readonlyTooltip" class="tooltip hidden">Read-only. Ask a guide to update.</div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+

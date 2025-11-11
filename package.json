@@ -3,6 +3,7 @@
   "version": "2.0.0",
   "description": "Student accountability dashboard for Alpha Afterschool program",
   "main": "server.js",
+  "type": "module",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js"
@@ -13,6 +14,9 @@
     "dashboard"
   ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@vercel/kv": "^1.0.1"
+  }
 }
 

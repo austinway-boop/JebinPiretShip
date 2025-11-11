@@ -3,12 +3,12 @@
     {
       "id": "student-1762892735829",
       "full_name": "Austin",
-      "status": "Active",
-      "pirate_start": null,
-      "pirate_end": null,
+      "status": "PirateShip",
+      "pirate_start": "2025-11-11T20:26:10.753Z",
+      "pirate_end": "2025-11-25T20:26:10.753Z",
       "notes": "",
       "last_updated_by": "Admin",
-      "last_updated_at": "2025-11-11T20:25:35.829Z"
+      "last_updated_at": "2025-11-11T20:26:12.173Z"
     }
   ],
   "auditLog": [
@@ -55,14 +55,40 @@
       "new_values": {
         "id": "student-1762892735829",
         "full_name": "Austin",
+        "status": "PirateShip",
+        "pirate_start": "2025-11-11T20:26:10.753Z",
+        "pirate_end": "2025-11-25T20:26:10.753Z",
+        "notes": "",
+        "last_updated_by": "Admin",
+        "last_updated_at": "2025-11-11T20:26:12.173Z"
+      }
+    },
+    {
+      "timestamp": "2025-11-11T20:26:12.173Z",
+      "student_id": "student-1762892735829",
+      "action": "Bulk Move to Pirate Ship",
+      "actor": "Admin",
+      "old_values": {
+        "id": "student-1762892735829",
+        "full_name": "Austin",
         "status": "Active",
         "pirate_start": null,
         "pirate_end": null,
         "notes": "",
         "last_updated_by": "Admin",
         "last_updated_at": "2025-11-11T20:25:35.829Z"
+      },
+      "new_values": {
+        "id": "student-1762892735829",
+        "full_name": "Austin",
+        "status": "PirateShip",
+        "pirate_start": "2025-11-11T20:26:10.753Z",
+        "pirate_end": "2025-11-25T20:26:10.753Z",
+        "notes": "",
+        "last_updated_by": "Admin",
+        "last_updated_at": "2025-11-11T20:26:12.173Z"
       }
     }
   ],
-  "lastUpdated": "2025-11-11T20:25:35.829Z"
+  "lastUpdated": "2025-11-11T20:26:12.174Z"
 }

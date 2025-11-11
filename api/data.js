@@ -1,17 +1,7 @@
 // Vercel serverless function for data management
-// For production, this will use a database (we'll set up with Vercel Postgres)
+// Uses Vercel KV (Redis) for persistent storage
 
-const fs = require('fs');
-const path = require('path');
-
-// In-memory storage for Vercel (will be replaced with database)
-let dataStore = {
-  students: [],
-  auditLog: [],
-  lastUpdated: null
-};
-
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -23,19 +13,54 @@ module.exports = async (req, res) => {
   }
 
   if (req.method === 'GET') {
-    // Return current data
-    // In production, fetch from database
-    return res.status(200).json(dataStore);
+    try {
+      // Try to use Vercel KV if available
+      if (process.env.KV_REST_API_URL) {
+        const { kv } = await import('@vercel/kv');
+        const data = await kv.get('alpha_fleet_data');
+        
+        if (data) {
+          return res.status(200).json(data);
+        }
+      }
+      
+      // Return empty data if no KV or no data stored
+      return res.status(200).json({
+        students: [],
+        auditLog: [],
+        lastUpdated: null
+      });
+    } catch (error) {
+      console.error('Error loading data:', error);
+      return res.status(200).json({
+        students: [],
+        auditLog: [],
+        lastUpdated: null
+      });
+    }
   }
 
   if (req.method === 'POST') {
-    // Save data
-    const data = req.body;
-    dataStore = data;
-    // In production, save to database
-    return res.status(200).json({ success: true, message: 'Data saved' });
+    try {
+      const data = req.body;
+      
+      // Try to use Vercel KV if available
+      if (process.env.KV_REST_API_URL) {
+        const { kv } = await import('@vercel/kv');
+        await kv.set('alpha_fleet_data', data);
+      }
+      
+      return res.status(200).json({ 
+        success: true, 
+        message: 'Data saved',
+        kvEnabled: !!process.env.KV_REST_API_URL
+      });
+    } catch (error) {
+      console.error('Error saving data:', error);
+      return res.status(500).json({ error: 'Failed to save data' });
+    }
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
-};
+}
 

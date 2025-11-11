@@ -238,11 +238,28 @@ function renderStudentCard(student) {
         </div>
     `;
     
-    card.addEventListener('click', () => openStudentDrawer(student.id));
+    // Track if we're dragging to prevent click event
+    let isDragging = false;
+    
+    card.addEventListener('click', (e) => {
+        if (!isDragging) {
+            openStudentDrawer(student.id);
+        }
+        isDragging = false;
+    });
     
     if (isAdminMode) {
-        card.addEventListener('dragstart', handleDragStart);
-        card.addEventListener('dragend', handleDragEnd);
+        card.addEventListener('dragstart', (e) => {
+            isDragging = true;
+            handleDragStart(e);
+        });
+        card.addEventListener('dragend', (e) => {
+            handleDragEnd(e);
+            // Reset isDragging after a short delay to allow click event to check it
+            setTimeout(() => {
+                isDragging = false;
+            }, 100);
+        });
     } else {
         // Show read-only tooltip on drag attempt
         card.addEventListener('mousedown', (e) => {
@@ -349,14 +366,17 @@ function updateLastRefresh() {
 
 // Drag and Drop handlers
 function handleDragStart(e) {
+    console.log('🎯 Drag started, isAdminMode:', isAdminMode, 'studentId:', e.target.dataset.studentId);
     if (!isAdminMode) {
         e.preventDefault();
+        console.log('❌ Drag prevented - not in admin mode');
         return;
     }
     
     e.target.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/html', e.target.dataset.studentId);
+    console.log('✅ Drag data set');
 }
 
 function handleDragEnd(e) {
@@ -383,6 +403,7 @@ function handleDragLeave(e) {
 }
 
 function handleDrop(e) {
+    console.log('📍 Drop event triggered');
     e.preventDefault();
     
     const column = e.target.closest('.column-content');
@@ -390,15 +411,33 @@ function handleDrop(e) {
         column.classList.remove('drag-over');
     }
     
-    if (!isAdminMode) return;
+    if (!isAdminMode) {
+        console.log('❌ Drop prevented - not in admin mode');
+        return;
+    }
     
     const studentId = e.dataTransfer.getData('text/html');
-    const targetStatus = column.dataset.status;
+    const targetStatus = column ? column.dataset.status : null;
+    
+    console.log('📦 Drop data - studentId:', studentId, 'targetStatus:', targetStatus);
+    
+    if (!studentId || !targetStatus) {
+        console.log('❌ Missing data for drop');
+        return;
+    }
     
     const student = students.find(s => s.id === studentId);
-    if (!student) return;
+    if (!student) {
+        console.log('❌ Student not found:', studentId);
+        return;
+    }
     
-    if (student.status === targetStatus) return;
+    if (student.status === targetStatus) {
+        console.log('ℹ️ Student already in target status');
+        return;
+    }
+    
+    console.log('✅ Opening modal for:', student.full_name, 'to', targetStatus);
     
     if (targetStatus === 'PirateShip') {
         openPirateModal(student);
